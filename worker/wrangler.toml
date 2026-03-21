@@ -1,0 +1,7 @@
+name = "gate-api"
+main = "gate-api.js"
+compatibility_date = "2025-01-01"
+
+routes = [
+  { pattern = "gate.penumbraforge.com/*", zone_name = "penumbraforge.com" }
+]

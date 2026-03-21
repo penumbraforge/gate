@@ -1,0 +1,50 @@
+{
+  "name": "@penumbra/gate",
+  "version": "2.0.0-beta.1",
+  "description": "Gate: Zero-config secret scanner with auto-fix. Finds secrets, fixes them, for free.",
+  "main": "src/cli/scanner.js",
+  "bin": {
+    "gate": "bin/gate.js"
+  },
+  "scripts": {
+    "test": "jest",
+    "test:cli": "jest --selectProjects cli",
+    "test:watch": "jest --watch"
+  },
+  "keywords": [
+    "security",
+    "secrets",
+    "pre-commit",
+    "github-actions",
+    "pii",
+    "compliance",
+    "zero-trust"
+  ],
+  "author": "Penumbra Security",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/penumbra/gate.git"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "files": [
+    "bin",
+    "src/cli",
+    "!src/cli/__tests__",
+    "rules",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^25.2.3",
+    "jest": "^30.2.0",
+    "typescript": "^5.9.3"
+  }
+}

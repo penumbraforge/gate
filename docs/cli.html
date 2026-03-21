@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CLI Reference - Gate Docs</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">menu</button>
+
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <a href="index.html" class="sidebar-logo">gate <span>docs</span></a>
+      <div class="sidebar-tagline">every commit through gate</div>
+    </div>
+    <nav>
+      <div class="nav-section">getting started</div>
+      <a href="index.html">overview</a>
+      <a href="quickstart.html">quick start</a>
+      <a href="cli.html" class="active">cli reference</a>
+      <div class="nav-section">features</div>
+      <a href="api.html">api routes</a>
+      <a href="github-action.html">github action</a>
+      <a href="dashboard.html">dashboard</a>
+      <a href="vault.html">vault &amp; encryption</a>
+      <div class="nav-section">operations</div>
+      <a href="deployment.html">deployment</a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <h1>CLI Reference</h1>
+    <p class="subtitle">All Gate commands and options.</p>
+
+    <h2>Commands</h2>
+
+    <pre><code>gate scan                    <span class="cm"># Scan files for secrets</span>
+gate serve                   <span class="cm"># Start API + dashboard on :3000</span>
+gate serve <span class="cf">--port</span> 8080       <span class="cm"># Custom port</span>
+gate worker                  <span class="cm"># Start background job processors</span>
+gate install                 <span class="cm"># Install pre-commit hook</span>
+gate audit <span class="cf">--since</span> 7d        <span class="cm"># Query audit log</span>
+gate auth GATE-PRO-TEAM-...  <span class="cm"># Activate license</span>
+gate version                 <span class="cm"># Show version</span>
+gate help                    <span class="cm"># Show all commands</span></code></pre>
+
+    <h2>gate scan</h2>
+
+    <p>Scans files for secrets using the FORTRESS rule engine (50+ patterns across 26 categories). Pure JavaScript, no build or database required.</p>
+
+    <pre><code><span class="cm"># Scan staged files (pre-commit mode)</span>
+gate scan
+
+<span class="cm"># Scan specific files</span>
+gate scan config.js .env secrets.yaml
+
+<span class="cm"># Scan with JSON output</span>
+gate scan <span class="cf">--format</span> json</code></pre>
+
+    <h3>Detection Pipeline</h3>
+    <ol>
+      <li><strong>File Input</strong> &mdash; reads file content line by line</li>
+      <li><strong>Pattern Matching</strong> &mdash; tests each line against 50+ regex rules</li>
+      <li><strong>Entropy Analysis</strong> &mdash; calculates Shannon entropy on suspicious tokens (threshold: 3.8 bits/char)</li>
+      <li><strong>False Positive Filtering</strong> &mdash; skips known safe patterns (test fixtures, example values)</li>
+      <li><strong>Result Aggregation</strong> &mdash; groups findings by file and severity (critical/high/medium/low)</li>
+    </ol>
+
+    <h2>gate install</h2>
+
+    <p>Installs a Git pre-commit hook that runs <code>gate scan</code> on staged files before every commit.</p>
+
+    <pre><code>gate install</code></pre>
+
+    <p>The hook shows interactive prompts when secrets are found:</p>
+    <pre><code>Found potential AWS secret in config.js
+(f)ix it now | (s)kip | (b)ypass | (c)ancel</code></pre>
+
+    <h2>gate serve</h2>
+
+    <p>Starts the Express API server and React dashboard on a single port.</p>
+
+    <pre><code><span class="cm"># Default (port 3000)</span>
+gate serve
+
+<span class="cm"># Custom port</span>
+gate serve <span class="cf">--port</span> 8080
+
+<span class="cm"># API only (no dashboard)</span>
+DISABLE_DASHBOARD=1 gate serve</code></pre>
+
+    <table>
+      <thead>
+        <tr><th>Option</th><th>Default</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>--port</code></td><td>3000</td><td>Port to listen on</td></tr>
+        <tr><td><code>DISABLE_DASHBOARD</code></td><td>unset</td><td>Set to 1 for API-only mode</td></tr>
+      </tbody>
+    </table>
+
+    <p>Requires a build step first (<code>npm run build</code>) and PostgreSQL.</p>
+
+    <h2>gate worker</h2>
+
+    <p>Starts BullMQ background job processors. Requires Redis.</p>
+
+    <table>
+      <thead>
+        <tr><th>Worker</th><th>Schedule</th><th>Purpose</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>quota-reset</td><td>1st of month</td><td>Resets free plan scan counters</td></tr>
+        <tr><td>audit-cleanup</td><td>Daily 03:00 UTC</td><td>Purges expired audit logs</td></tr>
+        <tr><td>license-rotation</td><td>Daily 09:00 UTC</td><td>Checks for expiring licenses</td></tr>
+        <tr><td>stripe-webhook</td><td>On demand</td><td>Processes Stripe events</td></tr>
+        <tr><td>webhook-delivery</td><td>On demand</td><td>Delivers outgoing webhooks</td></tr>
+        <tr><td>email-notification</td><td>On demand</td><td>Sends notification emails</td></tr>
+      </tbody>
+    </table>
+
+    <h2>gate audit</h2>
+
+    <p>Queries the local audit log stored at <code>~/.gate/audit.jsonl</code>.</p>
+
+    <pre><code>gate audit <span class="cf">--since</span> 7d          <span class="cm"># Last 7 days</span>
+gate audit <span class="cf">--stats</span>             <span class="cm"># Aggregate statistics</span>
+gate audit <span class="cf">--export</span> json       <span class="cm"># Export full log</span>
+gate audit <span class="cf">--verify</span>            <span class="cm"># Verify integrity chain</span></code></pre>
+
+    <p>Each entry includes timestamp, commit hash, files scanned, findings with severity, user decision, and a SHA-256 integrity hash chain.</p>
+
+    <h2>gate auth</h2>
+
+    <p>Manages license activation and credentials.</p>
+
+    <pre><code>gate auth GATE-PRO-TEAM123-2027-01-01-abc123    <span class="cm"># Activate license</span>
+gate license                                      <span class="cm"># Show license status</span>
+gate logout                                       <span class="cm"># Clear credentials</span></code></pre>
+
+    <p>License keys encode: plan type, team ID, expiry date, and HMAC signature. Free plans get 50 scans/month.</p>
+
+    <h2>gate vault</h2>
+
+    <p>Manages local AES-256-GCM encryption for secrets. The vault key is 32 random bytes stored as hex in <code>~/.gate/vault.key</code> (chmod 0600).</p>
+
+    <pre><code>gate vault keygen              <span class="cm"># Generate ~/.gate/vault.key</span>
+gate vault encrypt &lt;value&gt;     <span class="cm"># AES-256-GCM encrypt &rarr; base64 blob</span>
+gate vault decrypt &lt;blob&gt;      <span class="cm"># Decrypt vault blob &rarr; plaintext</span>
+gate vault env &lt;file&gt;          <span class="cm"># Encrypt all .env values &rarr; .env.encrypted</span></code></pre>
+
+    <h3>Output Format</h3>
+    <p>Encrypted values are base64-encoded JSON containing: <code>algo</code>, <code>iv</code>, <code>ct</code> (ciphertext), and <code>authTag</code>. A random IV is generated per encryption operation.</p>
+
+    <h3>VAULT: Prefix</h3>
+    <p>Environment variables prefixed with <code>VAULT:</code> are automatically decrypted at server startup using the vault key. Example:</p>
+
+    <pre><code><span class="cm"># .env.encrypted</span>
+DATABASE_URL=<span class="cs">VAULT:eyJhbGdvIjoiYWVzLTI1Ni1nY20iLC...</span>
+REDIS_URL=<span class="cs">VAULT:eyJhbGdvIjoiYWVzLTI1Ni1nY20iLC...</span></code></pre>
+
+    <p>See <a href="vault.html">Vault &amp; Encryption</a> for full details.</p>
+
+    <h2>gate setup</h2>
+
+    <p>One-command project setup that handles dependencies, database, Prisma client generation, build, and Git hook installation.</p>
+
+    <pre><code>gate setup                     <span class="cm"># Full project setup (deps, db, prisma, build, hook)</span>
+gate setup <span class="cf">--skip-db</span>           <span class="cm"># CLI-only install (no PostgreSQL)</span></code></pre>
+
+    <div class="callout">
+      <p><code>gate setup</code> is idempotent &mdash; safe to run multiple times. It skips steps that are already complete.</p>
+    </div>
+
+    <h2>Remediation Guidance</h2>
+
+    <p>Scan output now includes grouped remediation guidance for each finding. Each finding is annotated with an action and links to provider documentation.</p>
+
+    <table>
+      <thead>
+        <tr><th>Action</th><th>Meaning</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="badge badge-red">ROTATE</span></td><td>Secret is exposed &mdash; rotate immediately via provider dashboard</td></tr>
+        <tr><td><span class="badge badge-yellow">MOVE TO ENV</span></td><td>Hardcoded value should be moved to an environment variable</td></tr>
+        <tr><td><span class="badge badge-blue">ENCRYPT</span></td><td>Sensitive value should be encrypted using <code>gate vault encrypt</code></td></tr>
+        <tr><td><span class="badge badge-green">USE VAULT</span></td><td>Use <code>VAULT:</code> prefix for automatic decryption at startup</td></tr>
+        <tr><td><span class="badge">REVIEW</span></td><td>Manual review needed &mdash; may be a false positive or test fixture</td></tr>
+      </tbody>
+    </table>
+
+    <p>Each finding also links to the relevant provider's documentation for credential rotation (e.g., AWS IAM console, GitHub token settings, Stripe API key management).</p>
+
+    <div class="footer">
+      Gate &mdash; Penumbra Forge &middot; <a href="https://github.com/penumbra/gate">GitHub</a>
+    </div>
+  </main>
+</body>
+</html>

@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+dist/
+build/
+.next/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Private data
+.gate/
+~/.gate
+audit.jsonl
+*.pem
+*.key
+*.p12
+
+# License keys (never commit)
+.license
+gate-license.txt
+
+# Secrets (extra paranoid)
+.env.secret
+secrets/
+cookies.txt
+internal/
+.aider*

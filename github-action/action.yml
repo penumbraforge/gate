@@ -1,0 +1,44 @@
+name: 'Gate Security Scanner'
+description: 'Detect and remediate secrets in pull requests and pushes. Free, open source.'
+author: 'PenumbraForge'
+
+inputs:
+  mode:
+    description: 'enforce (block on findings) or report (just log)'
+    required: false
+    default: 'report'
+  verify:
+    description: 'Verify if detected credentials are live (true/false)'
+    required: false
+    default: 'false'
+  format:
+    description: 'Output format: text, json, sarif'
+    required: false
+    default: 'text'
+  fail-on:
+    description: 'Minimum severity to fail: critical, high, medium, low'
+    required: false
+    default: 'high'
+  slack-webhook:
+    description: 'Slack webhook URL for notifications'
+    required: false
+  github-token:
+    description: 'GitHub token for PR comments'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  findings-count:
+    description: 'Number of findings detected'
+  blocked:
+    description: 'Whether the action blocked the commit'
+  scan-report:
+    description: 'JSON scan report'
+
+runs:
+  using: 'node20'
+  main: 'action.js'
+
+branding:
+  icon: 'shield'
+  color: 'red'

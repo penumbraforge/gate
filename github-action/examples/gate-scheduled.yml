@@ -1,0 +1,39 @@
+name: Gate Scheduled Security Audit
+on:
+  schedule:
+    # Daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:  # Manual trigger
+
+jobs:
+  gate-audit:
+    runs-on: ubuntu-latest
+    name: Daily Security Audit
+    
+    permissions:
+      contents: read
+      issues: write
+    
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - uses: penumbra/gate@v1
+        id: gate
+        with:
+          mode: report
+          failure-mode: warn
+          slack-webhook: ${{ secrets.SLACK_WEBHOOK }}
+      
+      - name: Create Issue on Findings
+        if: steps.gate.outputs.findings-count > 0
+        uses: actions/github-script@v6
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `⚠️ Security findings from Gate daily audit`,
+              body: `Daily Gate security scan found ${{ steps.gate.outputs.findings-count }} issues.\n\nReview run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`
+            })

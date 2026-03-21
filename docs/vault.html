@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Vault &amp; Encryption - Gate Docs</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">menu</button>
+
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <a href="index.html" class="sidebar-logo">gate <span>docs</span></a>
+      <div class="sidebar-tagline">every commit through gate</div>
+    </div>
+    <nav>
+      <div class="nav-section">getting started</div>
+      <a href="index.html">overview</a>
+      <a href="quickstart.html">quick start</a>
+      <a href="cli.html">cli reference</a>
+      <div class="nav-section">features</div>
+      <a href="api.html">api routes</a>
+      <a href="github-action.html">github action</a>
+      <a href="dashboard.html">dashboard</a>
+      <a href="vault.html" class="active">vault &amp; encryption</a>
+      <div class="nav-section">operations</div>
+      <a href="deployment.html">deployment</a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <h1>Vault &amp; Encryption</h1>
+    <p class="subtitle">AES-256-GCM local encryption for secrets. Nothing leaves your machine.</p>
+
+    <h2>Overview</h2>
+
+    <p>Gate Vault provides local-only AES-256-GCM encryption for sensitive values. Encrypt database URLs, API keys, and other secrets so they never exist as plaintext in your repository or deployment configuration. All encryption and decryption happens on your machine &mdash; secrets never leave your infrastructure.</p>
+
+    <div class="card-grid">
+      <div class="card">
+        <h3>Local Only</h3>
+        <p>All encryption happens on your machine. No external services, no network calls, no cloud dependencies.</p>
+        <p><span class="badge badge-green">secure</span></p>
+      </div>
+      <div class="card">
+        <h3>AES-256-GCM</h3>
+        <p>Industry-standard authenticated encryption. Random IV per operation, authentication tag prevents tampering.</p>
+        <p><span class="badge badge-blue">cryptography</span></p>
+      </div>
+      <div class="card">
+        <h3>Auto-Decryption</h3>
+        <p>Environment variables with the <code>VAULT:</code> prefix are automatically decrypted at server startup.</p>
+        <p><span class="badge badge-yellow">convenience</span></p>
+      </div>
+    </div>
+
+    <h2>Key Management</h2>
+
+    <p>Generate a vault key with a single command:</p>
+
+    <pre><code>gate vault keygen</code></pre>
+
+    <p>This creates <code>~/.gate/vault.key</code> containing 32 random bytes encoded as hex (64 hex characters). The file is automatically set to <code>chmod 0600</code> (owner read/write only).</p>
+
+    <div class="callout">
+      <p><strong>Never commit your vault key.</strong> The key file lives at <code>~/.gate/vault.key</code> outside your repository. Add it to your global gitignore if you want extra safety. Back it up securely &mdash; if you lose the key, encrypted values cannot be recovered.</p>
+    </div>
+
+    <table>
+      <thead>
+        <tr><th>Property</th><th>Value</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Algorithm</td><td>AES-256-GCM</td></tr>
+        <tr><td>Key size</td><td>32 bytes (256 bits)</td></tr>
+        <tr><td>Key encoding</td><td>Hex (64 characters)</td></tr>
+        <tr><td>Key location</td><td><code>~/.gate/vault.key</code></td></tr>
+        <tr><td>File permissions</td><td><code>0600</code> (owner read/write)</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Encrypting Values</h2>
+
+    <p>Encrypt a single value from the command line:</p>
+
+    <pre><code>gate vault encrypt <span class="cs">"postgresql://user:password@host:5432/mydb"</span></code></pre>
+
+    <p>Output is a base64-encoded JSON blob containing:</p>
+
+    <table>
+      <thead>
+        <tr><th>Field</th><th>Description</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><code>algo</code></td><td>Algorithm identifier (<code>aes-256-gcm</code>)</td></tr>
+        <tr><td><code>iv</code></td><td>Random initialization vector (base64)</td></tr>
+        <tr><td><code>ct</code></td><td>Ciphertext (base64)</td></tr>
+        <tr><td><code>authTag</code></td><td>GCM authentication tag (base64)</td></tr>
+      </tbody>
+    </table>
+
+    <p>A new random IV is generated for every encryption operation, so encrypting the same value twice produces different output.</p>
+
+    <h2>Decrypting Values</h2>
+
+    <p>Decrypt a vault blob back to plaintext:</p>
+
+    <pre><code>gate vault decrypt <span class="cs">"eyJhbGdvIjoiYWVzLTI1Ni1nY20iLC..."</span></code></pre>
+
+    <p>The vault key at <code>~/.gate/vault.key</code> must be present. If the authentication tag does not match (tampered data), decryption fails with an error.</p>
+
+    <h2>Encrypting .env Files</h2>
+
+    <p>Encrypt an entire <code>.env</code> file in one step:</p>
+
+    <pre><code>gate vault env .env</code></pre>
+
+    <p>This creates <code>.env.encrypted</code> where every value is replaced with a <code>VAULT:</code>-prefixed encrypted blob:</p>
+
+    <pre><code><span class="cm"># Original .env</span>
+DATABASE_URL=<span class="cs">postgresql://user:password@localhost:5432/gate_dev</span>
+REDIS_URL=<span class="cs">redis://localhost:6379</span>
+STRIPE_SECRET_KEY=<span class="cs">sk_live_abc123...</span>
+
+<span class="cm"># Generated .env.encrypted</span>
+DATABASE_URL=<span class="cs">VAULT:eyJhbGdvIjoiYWVzLTI1Ni1nY20iLC...</span>
+REDIS_URL=<span class="cs">VAULT:eyJhbGdvIjoiYWVzLTI1Ni1nY20iLC...</span>
+STRIPE_SECRET_KEY=<span class="cs">VAULT:eyJhbGdvIjoiYWVzLTI1Ni1nY20iLC...</span></code></pre>
+
+    <p>Comments and empty lines are preserved. The encrypted file is safe to commit to your repository.</p>
+
+    <h2>VAULT: Prefix Auto-Decryption</h2>
+
+    <p>Environment variables prefixed with <code>VAULT:</code> are automatically decrypted when the Gate server starts. This means you can use encrypted values directly in your <code>.env</code> or system environment:</p>
+
+    <pre><code><span class="cm"># In your .env or system environment</span>
+DATABASE_URL=<span class="cs">VAULT:eyJhbGdvIjoiYWVzLTI1Ni1nY20iLC...</span>
+
+<span class="cm"># Gate reads this at startup and decrypts it to:</span>
+DATABASE_URL=<span class="cs">postgresql://user:password@localhost:5432/gate_dev</span></code></pre>
+
+    <p>The decryption is transparent &mdash; application code sees the plaintext value. The vault key must be available at <code>~/.gate/vault.key</code> on the machine running the server.</p>
+
+    <h2>Use Cases</h2>
+
+    <div class="card-grid">
+      <div class="card">
+        <h3>Database Credentials</h3>
+        <p>Encrypt <code>DATABASE_URL</code> and <code>REDIS_URL</code> so connection strings are never stored as plaintext in configuration files or CI environments.</p>
+      </div>
+      <div class="card">
+        <h3>Payment Keys</h3>
+        <p>Encrypt <code>STRIPE_SECRET_KEY</code>, <code>STRIPE_WEBHOOK_SECRET</code>, and other payment provider credentials.</p>
+      </div>
+      <div class="card">
+        <h3>API Keys</h3>
+        <p>Encrypt third-party API keys like <code>GITHUB_CLIENT_SECRET</code>, <code>SLACK_WEBHOOK_URL</code>, <code>SENDGRID_API_KEY</code>, and others.</p>
+      </div>
+      <div class="card">
+        <h3>CI/CD Secrets</h3>
+        <p>Store encrypted <code>.env.encrypted</code> in your repo and decrypt at deploy time using the vault key available on the production server.</p>
+      </div>
+    </div>
+
+    <h2>Security Properties</h2>
+
+    <table>
+      <thead>
+        <tr><th>Property</th><th>Detail</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Encryption</td><td>AES-256-GCM (authenticated encryption with associated data)</td></tr>
+        <tr><td>IV generation</td><td>Cryptographically random, unique per encryption operation</td></tr>
+        <tr><td>Integrity</td><td>GCM authentication tag detects any tampering with ciphertext</td></tr>
+        <tr><td>Key storage</td><td>Local filesystem only (<code>~/.gate/vault.key</code>), chmod 0600</td></tr>
+        <tr><td>Key never committed</td><td>Key lives outside the repository at <code>~/.gate/</code></td></tr>
+        <tr><td>No network</td><td>All operations are fully offline, no external service calls</td></tr>
+        <tr><td>Forward secrecy</td><td>Random IV per operation means identical plaintext produces different ciphertext</td></tr>
+      </tbody>
+    </table>
+
+    <div class="callout">
+      <p><strong>Backup your vault key.</strong> If you lose <code>~/.gate/vault.key</code>, all values encrypted with that key are permanently unrecoverable. Store a backup in a secure password manager or hardware security module.</p>
+    </div>
+
+    <h2>Quick Reference</h2>
+
+    <pre><code><span class="cm"># Generate vault key (once)</span>
+gate vault keygen
+
+<span class="cm"># Encrypt a single value</span>
+gate vault encrypt <span class="cs">"my-secret-value"</span>
+
+<span class="cm"># Decrypt a vault blob</span>
+gate vault decrypt <span class="cs">"eyJhbGdv..."</span>
+
+<span class="cm"># Encrypt entire .env file</span>
+gate vault env .env
+
+<span class="cm"># Result: .env.encrypted with VAULT: prefixed values</span>
+<span class="cm"># Use .env.encrypted as your env file &mdash; Gate auto-decrypts at startup</span></code></pre>
+
+    <div class="footer">
+      Gate &mdash; Penumbra Forge &middot; <a href="https://github.com/penumbra/gate">GitHub</a>
+    </div>
+  </main>
+</body>
+</html>

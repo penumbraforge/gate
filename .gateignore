@@ -1,0 +1,83 @@
+# Gate self-scan ignore patterns
+# These suppress false positives when Gate scans its own source code.
+# Every entry is a known false positive — not a real secret.
+
+# =============================================================================
+# Test fixtures — intentional fake secrets used for testing
+# =============================================================================
+src/cli/__tests__/**
+test/**
+github-action/test/**
+
+# =============================================================================
+# Rule definitions — contain example secret patterns by design
+# =============================================================================
+rules/rules.json
+rules/fortress.js
+
+# =============================================================================
+# Rule source — contains regex patterns and PEM header strings for detection
+# =============================================================================
+src/cli/rules.js
+
+# =============================================================================
+# Documentation — contains example commands, configs, and placeholder secrets
+# =============================================================================
+docs/**
+GUIDE.md
+README.md
+CONTRIBUTING.md
+CLAUDE.md
+
+# =============================================================================
+# .env.example — placeholder values, not real credentials
+# =============================================================================
+.env.example
+
+# =============================================================================
+# Internal planning documents — contain example configs and mock data
+# =============================================================================
+internal/**
+docs/superpowers/**
+
+# =============================================================================
+# GitHub Action — example configs, action metadata, and token-handling code
+# =============================================================================
+github-action/**
+
+# =============================================================================
+# Worker / marketing — Cloudflare Worker code and HTML email templates
+# =============================================================================
+worker/**
+
+# =============================================================================
+# Install scripts — shell code with high-entropy command strings
+# =============================================================================
+install.sh
+install.ps1
+
+# =============================================================================
+# Release script — shell code with version-string handling
+# =============================================================================
+scripts/**
+
+# =============================================================================
+# Shared modules with compliance/remediation text containing standard references
+# =============================================================================
+[rule:high-entropy-string] src/shared/compliance.ts
+[rule:high-entropy-string] src/shared/remediation.ts
+[rule:high-entropy-string] src/shared/strategies.ts
+
+# =============================================================================
+# Credential verification module — token-handling code triggers token-assignment
+# =============================================================================
+[rule:token-assignment] src/cli/verify.js
+[rule:api-key-assignment] src/cli/verify.js
+[rule:auth-header] src/cli/verify.js
+
+# =============================================================================
+# Remediation module — contains secret-like example text
+# =============================================================================
+[rule:token-assignment] src/cli/remediation.js
+[rule:high-entropy-string] src/cli/remediation.js
+[rule:high-entropy-string] src/cli/remediation.js

@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Quick Start - Gate Docs</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <button class="mobile-nav-toggle" onclick="document.querySelector('.sidebar').classList.toggle('open')">menu</button>
+
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <a href="index.html" class="sidebar-logo">gate <span>docs</span></a>
+      <div class="sidebar-tagline">every commit through gate</div>
+    </div>
+    <nav>
+      <div class="nav-section">getting started</div>
+      <a href="index.html">overview</a>
+      <a href="quickstart.html" class="active">quick start</a>
+      <a href="cli.html">cli reference</a>
+      <div class="nav-section">features</div>
+      <a href="api.html">api routes</a>
+      <a href="github-action.html">github action</a>
+      <a href="dashboard.html">dashboard</a>
+      <a href="vault.html">vault &amp; encryption</a>
+      <div class="nav-section">operations</div>
+      <a href="deployment.html">deployment</a>
+    </nav>
+  </aside>
+
+  <main class="main">
+    <h1>Quick Start</h1>
+    <p class="subtitle">Get Gate running in under 2 minutes.</p>
+
+    <h2>1. Install</h2>
+
+    <pre><code><span class="cm"># macOS / Linux</span>
+curl -fsSL https://gate.penumbraforge.com/install.sh | bash
+
+<span class="cm"># Windows (PowerShell)</span>
+irm https://gate.penumbraforge.com/install.ps1 | iex
+
+<span class="cm"># Or install manually</span>
+npm install -g @penumbra/gate</code></pre>
+
+    <h2>2. Set Up the Pre-Commit Hook</h2>
+
+    <pre><code><span class="cm"># Install the git hook</span>
+npx gate install
+
+<span class="cm"># That's it. Every commit is now scanned.</span>
+git commit -m <span class="cs">"add config"</span>
+<span class="cm"># Gate finds secrets, asks what to do</span></code></pre>
+
+    <div class="callout">
+      <p>The pre-commit hook is <strong>pure JavaScript</strong> &mdash; no build step, no database, no external dependencies. It works immediately after install.</p>
+    </div>
+
+    <h2>3. Add GitHub Actions (Optional)</h2>
+
+    <p>For server-side enforcement that can't be bypassed:</p>
+
+    <pre><code><span class="cm"># .github/workflows/gate.yml</span>
+<span class="ck">name:</span> Gate Security
+<span class="ck">on:</span> [pull_request, push]
+<span class="ck">jobs:</span>
+  gate:
+    <span class="ck">runs-on:</span> ubuntu-latest
+    <span class="ck">steps:</span>
+      - <span class="ck">uses:</span> actions/checkout@v4
+      - <span class="ck">uses:</span> penumbra/gate@v1
+        <span class="ck">with:</span>
+          <span class="ck">mode:</span> enforce
+          <span class="ck">slack-webhook:</span> ${{ secrets.SLACK_WEBHOOK }}</code></pre>
+
+    <p>See <a href="github-action.html">GitHub Action docs</a> for all options.</p>
+
+    <h2>4. Start the Dashboard (Optional)</h2>
+
+    <p>For team management, audit logs, and integrations:</p>
+
+    <pre><code>gate setup</code></pre>
+
+    <p><code>gate setup</code> handles everything automatically: installs dependencies, creates the database, generates the Prisma client, builds the frontend and backend, and installs the Git hook. Run it once and you're ready.</p>
+
+    <pre><code><span class="cm"># Start the server</span>
+gate serve</code></pre>
+
+    <p>Dashboard runs on <code>http://localhost:3000</code> by default.</p>
+
+    <h2>5. Encrypt Your Secrets (Optional)</h2>
+
+    <pre><code><span class="cm"># Generate a vault key</span>
+gate vault keygen
+<span class="cm"># => Key saved to .gate/vault.key</span>
+<span class="cm"># => Added .gate/vault.key to .gitignore</span>
+
+<span class="cm"># Encrypt a single secret value</span>
+gate vault encrypt <span class="cs">"sk_live_4eC39HqLyjWD..."</span>
+<span class="cm"># => VAULT:v1:aGVsbG8gd29ybGQ=:abc123...</span>
+
+<span class="cm"># Encrypt your entire .env file</span>
+gate vault env .env
+<span class="cm"># => Encrypted 12 values</span>
+<span class="cm"># => Written to .env.encrypted</span></code></pre>
+
+    <p>Values prefixed with <code>VAULT:</code> are automatically decrypted at server startup. Your <code>.env.encrypted</code> file is safe to commit &mdash; only machines with the vault key can decrypt the values.</p>
+
+    <div class="callout">
+      <p><strong>Vault key security:</strong> The vault key at <code>.gate/vault.key</code> is automatically added to <code>.gitignore</code>. Never commit this file. Share it securely with team members who need access (e.g., via a password manager or secure channel).</p>
+    </div>
+
+    <h3>Using VAULT: prefix in .env files</h3>
+
+    <pre><code><span class="cm"># .env.encrypted (safe to commit)</span>
+<span class="ck">STRIPE_KEY</span>=VAULT:v1:aGVsbG8=:def456...
+<span class="ck">DB_PASSWORD</span>=VAULT:v1:d29ybGQ=:ghi789...
+<span class="ck">APP_NAME</span>=MyApp  <span class="cm"># non-secret values stay plaintext</span></code></pre>
+
+    <p>At server startup, Gate reads the vault key and decrypts any <code>VAULT:</code>-prefixed values in memory. Plaintext values pass through unchanged. See <a href="vault.html">Vault &amp; Encryption</a> for full details.</p>
+
+    <h2>What's Next</h2>
+
+    <div class="card-grid">
+      <div class="card">
+        <h3><a href="cli.html">CLI Reference</a></h3>
+        <p>All commands: scan, install, audit, auth, and more.</p>
+      </div>
+      <div class="card">
+        <h3><a href="deployment.html">Production Deployment</a></h3>
+        <p>Deploy the full stack with PostgreSQL, Redis, and GitHub OAuth.</p>
+      </div>
+    </div>
+
+    <div class="footer">
+      Gate v2.1.0 &mdash; Penumbra Forge &middot; <a href="https://github.com/penumbraforge/gate">GitHub</a>
+    </div>
+  </main>
+</body>
+</html>

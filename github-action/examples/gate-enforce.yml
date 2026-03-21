@@ -1,0 +1,42 @@
+name: Gate Security Scan - Enforce Mode
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+concurrency:
+  group: gate-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  gate-scan:
+    runs-on: ubuntu-latest
+    name: Security Scan with Gate
+    
+    permissions:
+      contents: read
+      pull-requests: write
+      checks: write
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0  # Full history for accurate file detection
+      
+      - name: Run Gate Security Scanner
+        uses: penumbra/gate@v1
+        with:
+          mode: enforce
+          failure-mode: block
+          slack-webhook: ${{ secrets.SLACK_WEBHOOK }}
+          rules-version: "v1.2.3"
+          github-token: ${{ github.token }}
+      
+      - name: Report Results
+        if: always()
+        run: |
+          echo "Gate scan completed"
+          echo "Findings: ${{ steps.gate.outputs.findings-count }}"
+          echo "Status: ${{ job.status }}"

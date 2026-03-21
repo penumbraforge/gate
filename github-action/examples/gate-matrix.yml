@@ -1,0 +1,28 @@
+name: Gate Matrix Test
+on: [pull_request, push]
+
+jobs:
+  gate-matrix:
+    runs-on: ${{ matrix.os }}
+    name: Gate on ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: [18, 20]
+    
+    permissions:
+      contents: read
+      pull-requests: write
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: ${{ matrix.node }}
+      
+      - uses: penumbra/gate@v1
+        with:
+          mode: enforce
+          slack-webhook: ${{ secrets.SLACK_WEBHOOK }}

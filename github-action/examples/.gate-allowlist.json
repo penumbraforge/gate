@@ -1,0 +1,32 @@
+[
+  {
+    "file": "README.md",
+    "rule": "aws-secret-access-key",
+    "comment": "Documentation example showing key format"
+  },
+  {
+    "file": "docs/API.md",
+    "rule": "api-key-exposed",
+    "comment": "Example API key format in documentation"
+  },
+  {
+    "file": "config/example-env.yml",
+    "rule": "db-password-exposed",
+    "comment": "Template configuration with placeholder credentials"
+  },
+  {
+    "file": "test/fixtures/mock-secrets.json",
+    "rule": "stripe-api-key",
+    "comment": "Test fixture with mock Stripe key"
+  },
+  {
+    "file": "scripts/setup.sh",
+    "rule": "github-token",
+    "comment": "Setup script mentions GitHub tokens in comments"
+  },
+  {
+    "file": "CONTRIBUTING.md",
+    "rule": "slack-webhook",
+    "comment": "Documentation about Slack integration"
+  }
+]
