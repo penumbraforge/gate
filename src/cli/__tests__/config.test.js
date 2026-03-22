@@ -108,9 +108,52 @@ describe('config', () => {
       '    pattern: "[invalid(regex"',
       '    severity: high',
     ].join('\n'));
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
     const config = loadConfig(dir);
     expect(config.rules).toHaveLength(0);
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringMatching(/bad-rule.*invalid regex/));
+    consoleSpy.mockRestore();
     fs.rmSync(dir, { recursive: true });
+  });
+
+  test('warns on custom rule with invalid regex', () => {
+    const tmpDir = createTempDir();
+    fs.writeFileSync(path.join(tmpDir, '.gaterc'), JSON.stringify({
+      rules: [
+        { id: 'bad-rule', pattern: '[invalid(regex', severity: 'high' },
+        { id: 'good-rule', pattern: 'MYSECRET_[A-Z0-9]{32}', severity: 'high' }
+      ]
+    }));
+
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+    const config = loadConfig(tmpDir);
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringMatching(/bad-rule.*invalid regex/));
+    expect(config.rules).toHaveLength(1);
+    expect(config.rules[0].id).toBe('good-rule');
+
+    consoleSpy.mockRestore();
+    fs.rmSync(tmpDir, { recursive: true });
+  });
+
+  test('warns on custom rule missing required fields', () => {
+    const tmpDir = createTempDir();
+    fs.writeFileSync(path.join(tmpDir, '.gaterc'), JSON.stringify({
+      rules: [
+        { pattern: 'SECRET_[A-Z]+', severity: 'high' },
+        { id: 'no-pattern-rule', severity: 'high' }
+      ]
+    }));
+
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+    const config = loadConfig(tmpDir);
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringMatching(/missing 'id'/));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringMatching(/missing 'pattern'/));
+    expect(config.rules).toHaveLength(0);
+
+    consoleSpy.mockRestore();
+    fs.rmSync(tmpDir, { recursive: true });
   });
 
   test('detectStack finds Node.js projects', () => {

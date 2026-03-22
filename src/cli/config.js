@@ -62,8 +62,16 @@ function loadConfig(dir) {
 
   const customRules = [];
   if (Array.isArray(userConfig.rules)) {
-    for (const rule of userConfig.rules) {
-      if (!rule.id || !rule.pattern) continue;
+    for (let idx = 0; idx < userConfig.rules.length; idx++) {
+      const rule = userConfig.rules[idx];
+      if (!rule.id) {
+        console.error(`gate: Custom rule at index ${idx}: missing 'id' field. Skipping.`);
+        continue;
+      }
+      if (!rule.pattern) {
+        console.error(`gate: Custom rule '${rule.id}': missing 'pattern' field. Skipping.`);
+        continue;
+      }
       try {
         new RegExp(rule.pattern);
         customRules.push({
@@ -73,8 +81,8 @@ function loadConfig(dir) {
           severity: rule.severity || 'medium',
           remediation: rule.remediation || null,
         });
-      } catch {
-        // Skip rules with invalid regex
+      } catch (err) {
+        console.error(`gate: Custom rule '${rule.id}': invalid regex — ${err.message}. Skipping.`);
       }
     }
   }
