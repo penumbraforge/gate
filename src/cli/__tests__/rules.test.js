@@ -122,6 +122,19 @@ describe('getEntropyRule', () => {
   });
 });
 
+describe('rule signature verification', () => {
+  test('rule signature verification does not error', () => {
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+    jest.resetModules();
+    require('../rules');
+    const sigWarnings = consoleSpy.mock.calls.filter(c =>
+      typeof c[0] === 'string' && c[0].includes('signature mismatch')
+    );
+    expect(sigWarnings).toHaveLength(0);
+    consoleSpy.mockRestore();
+  });
+});
+
 describe('rule patterns match expected secrets', () => {
   test('aws-access-key-id pattern matches a valid AKIA key', () => {
     const rule = getRuleById('aws-access-key-id');

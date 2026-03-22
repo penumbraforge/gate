@@ -11,6 +11,21 @@ const fs = require('fs');
 const path = require('path');
 
 /**
+ * Derive a version-independent signing key from package identity.
+ * Uses package name + author (no version) so the key survives version bumps.
+ * Can be overridden via FORTRESS_SIGNING_KEY env var for CI/production.
+ */
+function getDerivedKey() {
+  if (process.env.FORTRESS_SIGNING_KEY) {
+    return process.env.FORTRESS_SIGNING_KEY;
+  }
+  const pkg = require('../package.json');
+  const identity = pkg.name + (pkg.author || '');
+  const hash = crypto.createHash('sha256').update(identity).digest('hex');
+  return crypto.createHmac('sha256', 'gate-fortress-' + hash).digest('hex');
+}
+
+/**
  * Shannon Entropy Calculator
  */
 function entropy(str) {
@@ -32,7 +47,7 @@ function entropy(str) {
 function signRules(rulesPath, outputPath) {
   const data = fs.readFileSync(rulesPath, 'utf8');
   const sig = crypto
-    .createHmac('sha256', process.env.FORTRESS_SIGNING_KEY || 'gate-fortress-dev-key')
+    .createHmac('sha256', getDerivedKey())
     .update(data)
     .digest('hex');
   fs.writeFileSync(outputPath, sig);
@@ -47,7 +62,7 @@ function verifySignature(rulesPath, sigPath) {
   const data = fs.readFileSync(rulesPath, 'utf8');
   const sig = fs.readFileSync(sigPath, 'utf8').trim();
   const expected = crypto
-    .createHmac('sha256', process.env.FORTRESS_SIGNING_KEY || 'gate-fortress-dev-key')
+    .createHmac('sha256', getDerivedKey())
     .update(data)
     .digest('hex');
   const valid = sig === expected;
@@ -254,31 +269,35 @@ ${rules
 `);
 }
 
-// CLI
-const cmd = process.argv[2];
-const rulesPath = '/Users/shadoe/.openclaw/workspace/gate-fortress/rules.json';
-const sigPath = '/Users/shadoe/.openclaw/workspace/gate-fortress/rules.json.sig';
+// Library exports (used by src/cli/rules.js for runtime verification)
+module.exports = { getDerivedKey, signRules, verifySignature, loadRules, runTests, printStats };
 
-switch (cmd) {
-  case 'sign':
-    signRules(rulesPath, sigPath);
-    break;
-  
-  case 'verify':
-    const valid = verifySignature(rulesPath, sigPath);
-    process.exit(valid ? 0 : 1);
-    break;
-  
-  case 'test':
-    runTests(rulesPath);
-    break;
-  
-  case 'stats':
-    printStats(rulesPath);
-    break;
-  
-  default:
-    console.log(`Gate FORTRESS Rules CLI
+// CLI — only runs when executed directly (not when required as a module)
+if (require.main === module) {
+  const cmd = process.argv[2];
+  const rulesPath = '/Users/shadoe/.openclaw/workspace/gate-fortress/rules.json';
+  const sigPath = '/Users/shadoe/.openclaw/workspace/gate-fortress/rules.json.sig';
+
+  switch (cmd) {
+    case 'sign':
+      signRules(rulesPath, sigPath);
+      break;
+
+    case 'verify':
+      const valid = verifySignature(rulesPath, sigPath);
+      process.exit(valid ? 0 : 1);
+      break;
+
+    case 'test':
+      runTests(rulesPath);
+      break;
+
+    case 'stats':
+      printStats(rulesPath);
+      break;
+
+    default:
+      console.log(`Gate FORTRESS Rules CLI
 
 Commands:
   sign      - Sign rules with HMAC-SHA256
@@ -286,4 +305,5 @@ Commands:
   test      - Run test suite
   stats     - Print statistics
 `);
+  }
 }

@@ -3,6 +3,33 @@
  * 50+ patterns covering common cloud providers, APIs, and private keys
  */
 
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+
+function verifyRuleSignature() {
+  try {
+    const rulesPath = path.join(__dirname, '../../rules/rules.json');
+    const sigPath = rulesPath + '.sig';
+    if (!fs.existsSync(sigPath)) return;
+
+    const { getDerivedKey } = require('../../rules/fortress');
+    const data = fs.readFileSync(rulesPath, 'utf8');
+    const sig = fs.readFileSync(sigPath, 'utf8').trim();
+
+    const expected = crypto.createHmac('sha256', getDerivedKey())
+      .update(data).digest('hex');
+
+    if (sig !== expected) {
+      console.error("gate: Rule file signature mismatch — rules may have been modified. Run 'gate update' to restore.");
+    }
+  } catch {
+    // Don't block scanning on verification errors
+  }
+}
+
+verifyRuleSignature();
+
 const RULES = [
   // AWS
   {
