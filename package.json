@@ -9,7 +9,8 @@
   "scripts": {
     "test": "jest",
     "test:cli": "jest --selectProjects cli",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "prepublishOnly": "npm test && node bin/gate.js scan --all"
   },
   "keywords": [
     "security",
@@ -43,7 +44,8 @@
     "!src/cli/__tests__",
     "rules",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "CHANGELOG.md"
   ],
   "dependencies": {
     "js-yaml": "^4.1.0"
