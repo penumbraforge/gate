@@ -367,3 +367,66 @@ describe('file size guard', () => {
     expect(scanner.formatBytes(1073741824)).toBe('1GB');
   });
 });
+
+describe('multiline secret detection', () => {
+  let scanner;
+
+  beforeEach(() => {
+    jest.resetModules();
+    scanner = require('../scanner');
+  });
+
+  function scanContent(content, filename = 'test.js') {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-'));
+    const filePath = path.join(tmpDir, filename);
+    fs.writeFileSync(filePath, content);
+    const result = scanner.scanFile(filePath, {});
+    fs.unlinkSync(filePath);
+    fs.rmdirSync(tmpDir);
+    return result;
+  }
+
+  test('detects AKIA key in template literal', () => {
+    const content = 'const key = `AKIAIOSFODNN7EXAMPLE`;';
+    const result = scanContent(content);
+    expect(result.findings.some(f => f.ruleId === 'aws-access-key-id')).toBe(true);
+  });
+
+  test('detects secret in concatenated strings', () => {
+    const content = `const key = "AKIA" + "IOSFODNN7EXAMPLE";`;
+    const result = scanContent(content);
+    expect(result.findings.some(f =>
+      f.ruleId === 'aws-access-key-id' && f.multiline === true
+    )).toBe(true);
+  });
+
+  test('does not flag normal template literals', () => {
+    const content = 'const msg = `Hello world, this is a normal template string with no secrets at all here`;';
+    const result = scanContent(content);
+    expect(result.findings.filter(f => f.multiline)).toHaveLength(0);
+  });
+
+  test('does not flag normal string concatenation', () => {
+    const content = `const msg = "Hello " + "world!!!";`;
+    const result = scanContent(content);
+    expect(result.findings).toHaveLength(0);
+  });
+
+  test('skips multiline extraction on large files', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-'));
+    const filePath = path.join(tmpDir, 'huge.js');
+    fs.writeFileSync(filePath, 'x'.repeat(600 * 1024));
+    const result = scanner.scanFile(filePath, {});
+    expect(result.error).toBeNull();
+    fs.unlinkSync(filePath);
+    fs.rmdirSync(tmpDir);
+  });
+
+  test('detects base64 blocks spanning multiple lines', () => {
+    const b64Line = 'YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXo=';
+    const content = `secret =\n${b64Line}\n${b64Line}\n${b64Line}\n`;
+    const result = scanContent(content);
+    // Should detect as multiline entropy (base64 block after assignment context)
+    expect(result.findings.some(f => f.multiline === true)).toBe(true);
+  });
+});

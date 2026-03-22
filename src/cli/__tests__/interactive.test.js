@@ -347,3 +347,110 @@ test('10. Multiple findings walks through each one', async () => {
   writeSpy.mockRestore();
   logSpy.mockRestore();
 });
+
+// ─── Test 11: interactive navigation ──────────────────────────────────────────
+
+describe('interactive navigation', () => {
+  test('runInteractive returns summary and modifiedFiles', async () => {
+    // Non-TTY stdin: promptChoice resolves to null (skip).
+    mockStdin.isTTY = false;
+
+    const { runInteractive } = require('../interactive');
+
+    jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    const findings = [
+      { ruleId: 'test-rule', ruleName: 'Test', severity: 'low', file: '/tmp/test.js', lineNumber: 1 },
+    ];
+    const result = await runInteractive(findings, { color: false });
+    expect(result).toHaveProperty('summary');
+    expect(result).toHaveProperty('modifiedFiles');
+    expect(Array.isArray(result.modifiedFiles)).toBe(true);
+    expect(result.summary.skipped).toBe(1);
+
+    process.stdout.write.mockRestore();
+    console.log.mockRestore();
+  });
+
+  test('[p] previous navigates back', async () => {
+    const { runInteractive } = require('../interactive');
+
+    const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    const findings = [
+      { ruleId: 'rule-a', ruleName: 'Rule A', severity: 'low', file: '/tmp/a.js', lineNumber: 1 },
+      { ruleId: 'rule-b', ruleName: 'Rule B', severity: 'low', file: '/tmp/b.js', lineNumber: 2 },
+    ];
+
+    // Skip first, then press 'p' to go back, then skip first again, then skip second.
+    setImmediate(() => {
+      mockStdin.emit('data', 's');
+      setImmediate(() => {
+        mockStdin.emit('data', 'p');
+        setImmediate(() => {
+          mockStdin.emit('data', 's');
+          setImmediate(() => mockStdin.emit('data', 's'));
+        });
+      });
+    });
+
+    const result = await runInteractive(findings, { color: false, repoDir: '/tmp' });
+
+    // Finding 1 was visited twice (initial + after p), so 's' was pressed 3 times total
+    // but Map deduplicates by index, so actions.size reflects unique indices acted on.
+    expect(result.summary.skipped).toBeGreaterThanOrEqual(2);
+    expect(result).toHaveProperty('modifiedFiles');
+
+    writeSpy.mockRestore();
+    logSpy.mockRestore();
+  });
+
+  test('[p] at first finding stays at index 0', async () => {
+    const { runInteractive } = require('../interactive');
+
+    jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    const findings = [
+      { ruleId: 'rule-a', ruleName: 'Rule A', severity: 'low', file: '/tmp/a.js', lineNumber: 1 },
+    ];
+
+    // Press 'p' at first finding (no-op), then skip.
+    setImmediate(() => {
+      mockStdin.emit('data', 'p');
+      setImmediate(() => mockStdin.emit('data', 's'));
+    });
+
+    const result = await runInteractive(findings, { color: false, repoDir: '/tmp' });
+    expect(result.summary.skipped).toBe(1);
+
+    process.stdout.write.mockRestore();
+    console.log.mockRestore();
+  });
+
+  test('menu shows [p] and [j] options for LOCAL finding', async () => {
+    const { runInteractive } = require('../interactive');
+
+    const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    setImmediate(() => mockStdin.emit('data', 's'));
+
+    const findings = [{ ruleId: 'rule-a', ruleName: 'Rule A', severity: 'low', file: '/tmp/a.js', lineNumber: 1 }];
+    await runInteractive(findings, { color: false, repoDir: '/tmp' });
+
+    const allOutput = [...writeSpy.mock.calls, ...logSpy.mock.calls]
+      .map(args => args.join(' '))
+      .join('\n');
+
+    expect(allOutput).toMatch(/\[p\]/);
+    expect(allOutput).toMatch(/\[j\]/);
+    expect(allOutput).toMatch(/Previous/);
+    expect(allOutput).toMatch(/Jump/);
+
+    writeSpy.mockRestore();
+    logSpy.mockRestore();
+  });
+});

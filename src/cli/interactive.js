@@ -136,7 +136,7 @@ function addToGateIgnore(ruleId, filePath, repoDir) {
  * @param {boolean}  [options.color]
  * @param {string}   [options.repoDir]
  * @param {number}   [options.context_lines]
- * @returns {Promise<void>}
+ * @returns {Promise<{summary: object, modifiedFiles: string[]}>}
  */
 async function runInteractive(findings, options = {}) {
   const useColor = options.color === true;
@@ -144,8 +144,10 @@ async function runInteractive(findings, options = {}) {
 
   const summary = { fixed: 0, ignored: 0, vaulted: 0, skipped: 0, responded: 0 };
   const modifiedFiles = [];
+  const actions = new Map(); // track which findings have been acted on
 
-  for (let i = 0; i < findings.length; i++) {
+  let i = 0;
+  while (i < findings.length) {
     const finding = findings[i];
 
     // ── Header ─────────────────────────────────────────────────────────────
@@ -187,9 +189,9 @@ async function runInteractive(findings, options = {}) {
     let action;
 
     if (isPushed) {
-      // PUSHED — respond, fix, skip, explain.
+      // PUSHED — respond, fix, skip, previous, jump, explain.
       action = await promptChoice(
-        ['r', 'f', 's', '?'],
+        ['r', 'f', 's', 'p', 'j', '?'],
         () => {
           process.stdout.write('\n');
           process.stdout.write(
@@ -204,6 +206,14 @@ async function runInteractive(findings, options = {}) {
             `  ${c(useColor, BOLD, '[s]')} Skip\n`
           );
           process.stdout.write(
+            `  ${c(useColor, BOLD, '[p]')} Previous  ` +
+            `${c(useColor, DIM, 'Go to previous finding')}\n`
+          );
+          process.stdout.write(
+            `  ${c(useColor, BOLD, '[j]')} Jump      ` +
+            `${c(useColor, DIM, 'Jump to finding #')}\n`
+          );
+          process.stdout.write(
             `  ${c(useColor, BOLD, '[?]')} Explain   ` +
             `${c(useColor, DIM, 'Full remediation guide + compliance')}\n`
           );
@@ -213,7 +223,7 @@ async function runInteractive(findings, options = {}) {
     } else {
       // LOCAL / COMMITTED / UNKNOWN — full option set.
       action = await promptChoice(
-        ['f', 'v', 'i', 's', '?'],
+        ['f', 'v', 'i', 's', 'p', 'j', '?'],
         () => {
           process.stdout.write('\n');
           process.stdout.write(
@@ -233,6 +243,14 @@ async function runInteractive(findings, options = {}) {
             `${c(useColor, DIM, 'Skip for now')}\n`
           );
           process.stdout.write(
+            `  ${c(useColor, BOLD, '[p]')} Previous  ` +
+            `${c(useColor, DIM, 'Go to previous finding')}\n`
+          );
+          process.stdout.write(
+            `  ${c(useColor, BOLD, '[j]')} Jump      ` +
+            `${c(useColor, DIM, 'Jump to finding #')}\n`
+          );
+          process.stdout.write(
             `  ${c(useColor, BOLD, '[?]')} Explain   ` +
             `${c(useColor, DIM, 'Full remediation guide + compliance')}\n`
           );
@@ -244,7 +262,21 @@ async function runInteractive(findings, options = {}) {
     process.stdout.write('\n');
 
     // ── Execute action ──────────────────────────────────────────────────────
-    if (action === 'f') {
+    if (action === 'p') {
+      if (i > 0) i--;
+      continue;
+
+    } else if (action === 'j') {
+      process.stdout.write(`  Jump to [1-${findings.length}]: `);
+      const rl = require('readline').createInterface({ input: process.stdin, output: process.stdout });
+      const target = await new Promise(resolve => rl.on('line', line => { rl.close(); resolve(line.trim()); }));
+      const num = parseInt(target, 10);
+      if (num >= 1 && num <= findings.length) {
+        i = num - 1;
+      }
+      continue;
+
+    } else if (action === 'f') {
       const result = fixer.fixFinding(finding, finding.file, { repoDir });
       if (result && result.fixed) {
         summary.fixed++;
@@ -259,6 +291,7 @@ async function runInteractive(findings, options = {}) {
       } else {
         console.log(`  ${c(useColor, YELLOW, '!')} Could not auto-fix — please fix manually`);
       }
+      actions.set(i, action);
 
     } else if (action === 'v') {
       try {
@@ -269,15 +302,18 @@ async function runInteractive(findings, options = {}) {
       } catch (err) {
         console.log(`  ${c(useColor, YELLOW, '!')} Vault error: ${err.message}`);
       }
+      actions.set(i, action);
 
     } else if (action === 'i') {
       addToGateIgnore(finding.ruleId, finding.file, repoDir);
       summary.ignored++;
       console.log(`  ${c(useColor, GREEN, '✓')} Added to .gateignore`);
+      actions.set(i, action);
 
     } else if (action === 'r') {
       await startIncidentResponse(finding, { cwd: options.repoDir || process.cwd() });
       summary.responded++;
+      actions.set(i, action);
 
     } else if (action === '?') {
       // Show remediation guide.
@@ -295,12 +331,44 @@ async function runInteractive(findings, options = {}) {
       console.log('');
 
       // After showing explanation, prompt again (same finding).
-      i--; // Decrement so the loop re-visits this finding.
       continue;
 
     } else if (action === 's' || action === null) {
       summary.skipped++;
       console.log(`  ${c(useColor, DIM, 'Skipped')}`);
+      actions.set(i, 's');
+    }
+
+    i++;
+  }
+
+  // ── Batch action for skipped findings ──────────────────────────────────────
+  const skippedCount = findings.length - actions.size;
+  if (skippedCount > 0 && summary.skipped > 0 && process.stdin.isTTY) {
+    const batchAction = await promptChoice(
+      ['i', 'l', 'q'],
+      () => {
+        process.stdout.write(`\n  ${skippedCount} finding(s) were skipped.\n`);
+        process.stdout.write(
+          `  ${c(useColor, BOLD, '[i]')} Ignore all skipped  ` +
+          `${c(useColor, BOLD, '[l]')} Leave as-is  ` +
+          `${c(useColor, BOLD, '[q]')} Quit\n`
+        );
+        process.stdout.write('  > ');
+      }
+    );
+    process.stdout.write('\n');
+    if (batchAction === 'i') {
+      let batchIgnored = 0;
+      for (let idx = 0; idx < findings.length; idx++) {
+        if (!actions.has(idx)) {
+          addToGateIgnore(findings[idx].ruleId, findings[idx].file, repoDir);
+          batchIgnored++;
+        }
+      }
+      summary.ignored += batchIgnored;
+      summary.skipped -= batchIgnored;
+      console.log(`  ${c(useColor, GREEN, '\u2713')} Added ${batchIgnored} entries to .gateignore`);
     }
   }
 
