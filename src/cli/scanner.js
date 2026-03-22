@@ -227,6 +227,107 @@ function scanForPatterns(content, lineNum, options = {}) {
   return findings;
 }
 
+const MULTILINE_MAX_FILE_SIZE = 500 * 1024; // 500KB
+const ASSIGNMENT_CONTEXT_RE = /[=:]\s*$|(?:key|secret|password|token|credential|api[_-]?key)\s*[=:]/i;
+
+/**
+ * Extract and check multiline secret candidates
+ * Detects secrets in template literals, concatenated strings, and base64 blocks
+ *
+ * @param {string} content - Full file content
+ * @param {object} options - Scanner options
+ * @returns {array} Array of multiline findings
+ */
+function extractMultilineStrings(content, options = {}) {
+  const findings = [];
+  if (content.length > MULTILINE_MAX_FILE_SIZE) return findings;
+
+  const rules = getPatternRules();
+  const entropyThreshold = options.entropyThreshold || 4.8;
+  const lines = content.split('\n');
+
+  // Helper: check a joined multiline string against rules and entropy
+  function checkMultilineCandidate(joined, startLine) {
+    // Check against pattern rules first
+    for (const rule of rules) {
+      if (!rule.pattern) continue;
+      const re = new RegExp(rule.pattern.source, 'g');
+      if (re.test(joined)) {
+        findings.push({
+          ruleId: rule.id,
+          ruleName: rule.name,
+          severity: rule.severity,
+          type: 'multiline-pattern',
+          lineNumber: startLine + 1,
+          match: joined.substring(0, 50) + (joined.length > 50 ? '...' : ''),
+          multiline: true,
+        });
+        return; // One match per candidate is enough
+      }
+    }
+    // Check entropy with assignment context
+    if (joined.length >= 20 && calculateEntropy(joined) >= entropyThreshold) {
+      const contextLine = startLine > 0 ? lines[startLine - 1] : '';
+      if (ASSIGNMENT_CONTEXT_RE.test(contextLine)) {
+        findings.push({
+          ruleId: 'high-entropy-string',
+          ruleName: 'High-Entropy String (multiline)',
+          severity: 'medium',
+          type: 'multiline-entropy',
+          lineNumber: startLine + 1,
+          match: joined.substring(0, 50) + '...',
+          entropy: calculateEntropy(joined).toFixed(2),
+          multiline: true,
+        });
+      }
+    }
+  }
+
+  // 1. Template literals (JS/TS): content between backticks
+  const templateRe = /`([^`]{20,})`/gs;
+  let tmplMatch;
+  while ((tmplMatch = templateRe.exec(content)) !== null) {
+    const inner = tmplMatch[1].replace(/\$\{[^}]*\}/g, '');
+    if (inner.length >= 20) {
+      const lineNum = content.substring(0, tmplMatch.index).split('\n').length - 1;
+      checkMultilineCandidate(inner, lineNum);
+    }
+  }
+
+  // 2. Concatenated strings: "..." + "..." or '...' + '...'
+  const concatRe = /(['"])([^'"]{4,})\1\s*\+\s*\1([^'"]{4,})\1/g;
+  let concatMatch;
+  while ((concatMatch = concatRe.exec(content)) !== null) {
+    const joined = concatMatch[2] + concatMatch[3];
+    if (joined.length >= 20) {
+      const lineNum = content.substring(0, concatMatch.index).split('\n').length - 1;
+      checkMultilineCandidate(joined, lineNum);
+    }
+  }
+
+  // 3. Base64 blocks: 3+ consecutive lines of base64 chars
+  const base64Re = /^[A-Za-z0-9+/=]{20,}$/;
+  let blockStart = -1;
+  let blockLines = [];
+
+  for (let i = 0; i <= lines.length; i++) {
+    const line = (i < lines.length) ? lines[i].trim() : '';
+    if (base64Re.test(line)) {
+      if (blockStart === -1) blockStart = i;
+      blockLines.push(line);
+    } else {
+      if (blockLines.length >= 3) {
+        const joined = blockLines.join('');
+        checkMultilineCandidate(joined, blockStart);
+      }
+      blockStart = -1;
+      blockLines = [];
+    }
+  }
+
+  return findings;
+}
+
 /**
  * Scan a single file for secrets
  *
@@ -291,6 +392,10 @@ function scanFile(filePath, options = {}) {
       ...options,
       entropyThreshold: fileEntropyThreshold,
     };
+
+    // Multiline secret detection (pre-pass on full content)
+    const multilineFindings = extractMultilineStrings(content, scanOptions);
+    results.findings.push(...multilineFindings);
 
     // Scan each line
     const lines = content.split('\n');
@@ -504,6 +609,7 @@ module.exports = {
   calculateEntropy,
   shouldScanForEntropy,
   scanForPatterns,
+  extractMultilineStrings,
   scanFile,
   scanFiles,
   scanAll,
