@@ -72,7 +72,7 @@ const INLINE_IGNORE_RE = /\/[\/\*]\s*gate-ignore(?::\s*(.+?))?\s*(?:\*\/)?\s*$/;
 
 function loadIgnorePatterns(dir) {
   dir = dir || process.cwd();
-  const result = { filePatterns: [], rulePatterns: [] };
+  const result = { filePatterns: [], rulePatterns: [], negationPatterns: [] };
   const ignorePath = path.join(dir, '.gateignore');
 
   if (!fs.existsSync(ignorePath)) return result;
@@ -81,6 +81,18 @@ function loadIgnorePatterns(dir) {
   for (const raw of lines) {
     const line = raw.trim();
     if (!line || line.startsWith('#')) continue;
+
+    if (line.startsWith('!')) {
+      const negGlob = line.slice(1).trim();
+      if (negGlob) {
+        try {
+          result.negationPatterns.push(globToRegex(negGlob));
+        } catch (err) {
+          console.error(`gate: Invalid negation pattern in .gateignore: ${line} — ${err.message}. Skipping.`);
+        }
+      }
+      continue;
+    }
 
     const ruleMatch = line.match(RULE_PATTERN_RE);
     if (ruleMatch) {
@@ -104,6 +116,11 @@ function loadIgnorePatterns(dir) {
 }
 
 function shouldIgnoreFile(filePath, patterns) {
+  if (patterns.negationPatterns) {
+    for (const regex of patterns.negationPatterns) {
+      if (regex.test(filePath)) return false;
+    }
+  }
   for (const regex of patterns.filePatterns) {
     if (regex.test(filePath)) return true;
   }
