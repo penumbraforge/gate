@@ -277,3 +277,93 @@ describe('scanner config/ignore integration', () => {
     }
   });
 });
+
+describe('file size guard', () => {
+  let scanner;
+
+  beforeEach(() => {
+    jest.resetModules();
+    scanner = require('../scanner');
+  });
+
+  test('skips files exceeding maxFileSize', () => {
+    const dir = createTempDir();
+    try {
+      const filePath = path.join(dir, 'large.js');
+      // Create a 3MB file with a secret on the first line
+      const secret = 'const key = "AKIAIOSFODNN7EXAMPLE";\n';
+      const padding = 'x'.repeat(1024) + '\n';
+      const content = secret + padding.repeat(3 * 1024);
+      fs.writeFileSync(filePath, content);
+
+      const results = scanner.scanFile(filePath, { maxFileSize: 2 * 1024 * 1024 });
+
+      expect(results.skipped).toBe(true);
+      expect(results.skipReason).toMatch(/exceeds limit/);
+      expect(results.findings).toHaveLength(0);
+    } finally {
+      cleanDir(dir);
+    }
+  });
+
+  test('scans files under the size limit normally', () => {
+    const dir = createTempDir();
+    try {
+      const filePath = path.join(dir, 'small.js');
+      fs.writeFileSync(filePath, 'const key = "AKIAIOSFODNN7EXAMPLE";\n');
+
+      const results = scanner.scanFile(filePath, { maxFileSize: 2 * 1024 * 1024 });
+
+      expect(results.skipped).toBeUndefined();
+      expect(results.findings.length).toBeGreaterThan(0);
+    } finally {
+      cleanDir(dir);
+    }
+  });
+
+  test('uses default 2MB limit when maxFileSize not specified', () => {
+    const dir = createTempDir();
+    try {
+      const filePath = path.join(dir, 'large.js');
+      // Create a file just over 2MB
+      const content = 'x'.repeat(2 * 1024 * 1024 + 1);
+      fs.writeFileSync(filePath, content);
+
+      const results = scanner.scanFile(filePath, {});
+
+      expect(results.skipped).toBe(true);
+      expect(results.skipReason).toMatch(/exceeds limit/);
+    } finally {
+      cleanDir(dir);
+    }
+  });
+
+  test('scanFiles propagates maxFileSize from config', () => {
+    const dir = createTempDir();
+    try {
+      // Create .gaterc with max_file_size
+      fs.writeFileSync(path.join(dir, '.gaterc'), 'max_file_size: 1KB\n');
+
+      const filePath = path.join(dir, 'medium.js');
+      // Create a 2KB file
+      fs.writeFileSync(filePath, 'x'.repeat(2048));
+
+      const results = scanner.scanFiles([filePath], { configDir: dir });
+      const fileResult = results.filesScanned.find(f => f.file === filePath);
+
+      expect(fileResult.skipped).toBe(true);
+      expect(fileResult.skipReason).toMatch(/exceeds limit/);
+    } finally {
+      cleanDir(dir);
+    }
+  });
+
+  test('formatBytes returns human-readable sizes', () => {
+    expect(scanner.formatBytes(500)).toBe('500B');
+    expect(scanner.formatBytes(1024)).toBe('1KB');
+    expect(scanner.formatBytes(1536)).toBe('1.5KB');
+    expect(scanner.formatBytes(1048576)).toBe('1MB');
+    expect(scanner.formatBytes(4404019)).toBe('4.2MB');
+    expect(scanner.formatBytes(1073741824)).toBe('1GB');
+  });
+});

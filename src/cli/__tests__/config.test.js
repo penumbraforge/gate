@@ -117,4 +117,77 @@ describe('config', () => {
     expect(patterns).toContain('node_modules/**');
     expect(patterns).toContain('.git/**');
   });
+
+  test('loadConfig includes max_file_size with default', () => {
+    const dir = createTempDir();
+    const config = loadConfig(dir);
+    expect(config.max_file_size).toBe(2 * 1024 * 1024);
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  test('loadConfig parses max_file_size from .gaterc', () => {
+    const dir = createTempDir();
+    fs.writeFileSync(path.join(dir, '.gaterc'), 'max_file_size: 5MB\n');
+    const config = loadConfig(dir);
+    expect(config.max_file_size).toBe(5 * 1024 * 1024);
+    fs.rmSync(dir, { recursive: true });
+  });
+});
+
+describe('parseFileSize', () => {
+  let parseFileSize, DEFAULT_MAX_FILE_SIZE;
+
+  beforeEach(() => {
+    jest.resetModules();
+    const config = require('../config');
+    parseFileSize = config.parseFileSize;
+    DEFAULT_MAX_FILE_SIZE = config.DEFAULT_MAX_FILE_SIZE;
+  });
+
+  test('passes through numeric values', () => {
+    expect(parseFileSize(2048)).toBe(2048);
+    expect(parseFileSize(1)).toBe(1);
+    expect(parseFileSize(10485760)).toBe(10485760);
+  });
+
+  test('parses string numbers as bytes', () => {
+    expect(parseFileSize('2048')).toBe(2048);
+    expect(parseFileSize('1000000')).toBe(1000000);
+  });
+
+  test('parses KB/K units (case-insensitive)', () => {
+    expect(parseFileSize('100KB')).toBe(100 * 1024);
+    expect(parseFileSize('100kb')).toBe(100 * 1024);
+    expect(parseFileSize('100K')).toBe(100 * 1024);
+    expect(parseFileSize('100k')).toBe(100 * 1024);
+  });
+
+  test('parses MB/M units (case-insensitive)', () => {
+    expect(parseFileSize('5MB')).toBe(5 * 1024 * 1024);
+    expect(parseFileSize('5mb')).toBe(5 * 1024 * 1024);
+    expect(parseFileSize('5M')).toBe(5 * 1024 * 1024);
+    expect(parseFileSize('5m')).toBe(5 * 1024 * 1024);
+  });
+
+  test('parses GB/G units (case-insensitive)', () => {
+    expect(parseFileSize('1GB')).toBe(1024 * 1024 * 1024);
+    expect(parseFileSize('1gb')).toBe(1024 * 1024 * 1024);
+    expect(parseFileSize('1G')).toBe(1024 * 1024 * 1024);
+  });
+
+  test('returns default for invalid input', () => {
+    expect(parseFileSize(null)).toBe(DEFAULT_MAX_FILE_SIZE);
+    expect(parseFileSize(undefined)).toBe(DEFAULT_MAX_FILE_SIZE);
+    expect(parseFileSize('abc')).toBe(DEFAULT_MAX_FILE_SIZE);
+    expect(parseFileSize('')).toBe(DEFAULT_MAX_FILE_SIZE);
+    expect(parseFileSize({})).toBe(DEFAULT_MAX_FILE_SIZE);
+    expect(parseFileSize(-100)).toBe(DEFAULT_MAX_FILE_SIZE);
+    expect(parseFileSize(NaN)).toBe(DEFAULT_MAX_FILE_SIZE);
+    expect(parseFileSize(Infinity)).toBe(DEFAULT_MAX_FILE_SIZE);
+  });
+
+  test('handles decimal values', () => {
+    expect(parseFileSize('1.5MB')).toBe(Math.round(1.5 * 1024 * 1024));
+    expect(parseFileSize('0.5GB')).toBe(Math.round(0.5 * 1024 * 1024 * 1024));
+  });
 });

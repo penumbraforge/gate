@@ -2,12 +2,40 @@ const fs = require('fs');
 const path = require('path');
 const yaml = require('js-yaml');
 
+const DEFAULT_MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
+
+/**
+ * Parse a human-readable file size string into bytes
+ *
+ * @param {number|string} value - Size value (e.g., 2048, '5MB', '100KB')
+ * @returns {number} Size in bytes
+ */
+function parseFileSize(value) {
+  if (typeof value === 'number' && isFinite(value) && value > 0) return value;
+  if (typeof value === 'string') {
+    const match = value.trim().match(/^(\d+(?:\.\d+)?)\s*(kb|k|mb|m|gb|g|b)?$/i);
+    if (match) {
+      const num = parseFloat(match[1]);
+      const unit = (match[2] || 'b').toUpperCase();
+      if (isNaN(num) || num <= 0) return DEFAULT_MAX_FILE_SIZE;
+      switch (unit) {
+        case 'KB': case 'K': return Math.round(num * 1024);
+        case 'MB': case 'M': return Math.round(num * 1024 * 1024);
+        case 'GB': case 'G': return Math.round(num * 1024 * 1024 * 1024);
+        default: return Math.round(num);
+      }
+    }
+  }
+  return DEFAULT_MAX_FILE_SIZE;
+}
+
 const DEFAULTS = {
   entropy_threshold: 4.8,
   verify: true,
   hooks: ['pre-commit'],
   severity: {},
   rules: [],
+  max_file_size: DEFAULT_MAX_FILE_SIZE,
   output: {
     format: 'text',
     color: 'auto',
@@ -72,6 +100,7 @@ function loadConfig(dir) {
     severity: (userConfig.severity && typeof userConfig.severity === 'object')
       ? userConfig.severity : DEFAULTS.severity,
     rules: customRules,
+    max_file_size: parseFileSize(userConfig.max_file_size),
     output: {
       format: userConfig.output?.format || DEFAULTS.output.format,
       color: userConfig.output?.color ?? DEFAULTS.output.color,
@@ -139,4 +168,4 @@ function getDefaultIgnorePatterns(stacks) {
   return patterns;
 }
 
-module.exports = { loadConfig, detectStack, getDefaultIgnorePatterns, DEFAULTS };
+module.exports = { loadConfig, detectStack, getDefaultIgnorePatterns, DEFAULTS, parseFileSize, DEFAULT_MAX_FILE_SIZE };

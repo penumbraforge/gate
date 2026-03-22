@@ -8,7 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { getPatternRules, getEntropyRule } = require('./rules');
-const { loadConfig } = require('./config');
+const { loadConfig, DEFAULT_MAX_FILE_SIZE } = require('./config');
 const { loadIgnorePatterns, shouldIgnoreFile, shouldIgnoreFinding, hasInlineIgnore } = require('./ignore');
 
 /**
@@ -27,6 +27,19 @@ const CONFIG_EXTENSIONS = new Set([
 ]);
 
 const MINIFIED_PATTERNS = ['.min.js', '.min.css', '.bundle.js', '.bundle.css'];
+
+/**
+ * Format a byte count into a human-readable string
+ *
+ * @param {number} bytes - Number of bytes
+ * @returns {string} Human-readable size (e.g., "4.2MB")
+ */
+function formatBytes(bytes) {
+  if (bytes < 1024) return bytes + 'B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1).replace(/\.0$/, '') + 'KB';
+  if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1).replace(/\.0$/, '') + 'MB';
+  return (bytes / (1024 * 1024 * 1024)).toFixed(1).replace(/\.0$/, '') + 'GB';
+}
 
 /**
  * Get the entropy threshold for a given file path based on its type
@@ -251,6 +264,14 @@ function scanFile(filePath, options = {}) {
     const stats = fs.statSync(filePath);
     results.size = stats.size;
 
+    // Skip files exceeding size limit to prevent OOM
+    const maxFileSize = options.maxFileSize || DEFAULT_MAX_FILE_SIZE;
+    if (results.size > maxFileSize) {
+      results.skipped = true;
+      results.skipReason = `File size ${formatBytes(results.size)} exceeds limit ${formatBytes(maxFileSize)}`;
+      return results;
+    }
+
     // Skip binary files by default
     if (!options.scanBinary && isBinaryFile(filePath)) {
       results.isBinary = true;
@@ -341,6 +362,7 @@ function scanFiles(filePaths, options = {}) {
     configDir,
     customRules,
     entropyThreshold: options.entropyThreshold || config.entropy_threshold,
+    maxFileSize: options.maxFileSize || config.max_file_size,
   };
 
   const results = {
@@ -479,4 +501,5 @@ module.exports = {
   getStagedFiles,
   getCurrentCommitHash,
   getEntropyThresholdForFile,
+  formatBytes,
 };
