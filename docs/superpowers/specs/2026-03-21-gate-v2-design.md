@@ -441,7 +441,7 @@ When Gate finds a potential secret, it optionally verifies whether the credentia
 ```
   src/config.js:12
   │  11   const stripe = require('stripe');
-  │  12   const key = "sk_live_00000000000000000000000000";
+  │  12   const key = "sk_live_EXAMPLE_NOT_REAL_00000000";
   │                    ▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔▔
   │  Stripe Live Secret Key ── CRITICAL ── VERIFIED LIVE
   │
@@ -886,7 +886,7 @@ Machine-readable JSON for CI pipeline consumption:
       "file": "src/config.js",
       "line": 12,
       "column": 20,
-      "match": "sk_live_4eC39H...p7dc",
+      "match": "sk_live_REDACTED...XXXX",
       "verification": "live",
       "exposure": "local",
       "remediation": {

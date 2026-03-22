@@ -91,7 +91,7 @@ describe('file size guard', () => {
   test('scans files under max_file_size normally', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-'));
     const smallFile = path.join(tmpDir, 'small.js');
-    fs.writeFileSync(smallFile, 'const key = "sk_live_abc123def456ghi789jkl012";');
+    fs.writeFileSync(smallFile, 'const key = "sk_live_EXAMPLE_TEST_KEY_00000000";');
 
     const result = scanFile(smallFile, { maxFileSize: 2 * 1024 * 1024 });
     expect(result.skipped).toBeFalsy();
@@ -1679,7 +1679,7 @@ abcdefghijklmnopqrstuvwxyz012345678901234567
   });
 
   test('detects secret in template literal', () => {
-    const content = 'const key = `sk_live_abcdefghijklmnopqrstuvwxyz`;';
+    const content = 'const key = `sk_live_EXAMPLE_TEST_KEY_00000000`;';
     const result = scanContent(content);
     expect(result.findings.some(f => f.ruleId === 'stripe-live-secret')).toBe(true);
   });
@@ -2481,7 +2481,7 @@ git commit -m "chore: update .gateignore for launch-readiness changes"
 
 ```bash
 cd /tmp && mkdir gate-test-repo && cd gate-test-repo && git init
-echo 'const key = "sk_live_abc123def456ghi789jkl012";' > secret.js
+echo 'const key = "sk_live_EXAMPLE_TEST_KEY_00000000";' > secret.js
 git add . && npx /path/to/gate
 ```
 
