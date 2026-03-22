@@ -191,6 +191,27 @@ function buildSarif(results, allFindings) {
 }
 
 /**
+ * Re-scan after remediation and exit with appropriate code.
+ * If all findings are resolved, re-stage modified files (in pre-commit mode) and exit 0.
+ */
+function exitAfterRemediation(filesToScan, modifiedFiles, scanOptions, isPreCommitHook) {
+  const residual = scanFiles(filesToScan, scanOptions);
+  if (residual.totalFindings === 0) {
+    if (isPreCommitHook && modifiedFiles.length > 0) {
+      try {
+        execSync(`git add ${modifiedFiles.map(f => `"${f}"`).join(' ')}`);
+        console.log(`  re-staged: ${modifiedFiles.join(', ')}`);
+      } catch { /* best effort */ }
+    }
+    console.log('');
+    process.exit(0);
+  } else {
+    console.log(`\n  ${residual.totalFindings} finding(s) remain after remediation.\n`);
+    process.exit(1);
+  }
+}
+
+/**
  * Handle scan command
  *
  * @param {array} files - Files to scan (or empty for staged)
@@ -229,20 +250,19 @@ async function handleScan(files, options) {
 
   // Determine files to scan
   let results;
+  let filesToScan = [];
+  const scanOptions = { entropyThreshold };
   if (options.all) {
-    results = scanAll({ entropyThreshold });
+    results = scanAll(scanOptions);
+    filesToScan = results.filesScanned.map(f => f.file);
   } else {
-    let filesToScan = files;
+    filesToScan = files.length > 0 ? files : getStagedFiles();
     if (filesToScan.length === 0) {
-      filesToScan = getStagedFiles();
-
-      if (filesToScan.length === 0) {
-        console.log('No staged files to scan.');
-        process.exit(0);
-      }
+      console.log('No staged files to scan.');
+      process.exit(0);
     }
 
-    results = scanFiles(filesToScan, { entropyThreshold });
+    results = scanFiles(filesToScan, scanOptions);
   }
 
   // Collect all findings with file reference
@@ -329,12 +349,13 @@ async function handleScan(files, options) {
 
     // If --interactive flag, jump straight to interactive mode
     if (options.interactive) {
-      await runInteractive(allFindings, {
+      const interactiveResult = await runInteractive(allFindings, {
         color: useColor,
         repoDir: process.cwd(),
         context_lines: contextLines,
       });
-      process.exit(1);
+      const modFiles = interactiveResult ? interactiveResult.modifiedFiles || [] : [];
+      exitAfterRemediation(filesToScan, modFiles, scanOptions, isPreCommitHook);
     }
 
     // Interactive prompt (TTY only, non-CI)
@@ -342,7 +363,6 @@ async function handleScan(files, options) {
       const choice = await promptHookAction(useColor);
 
       if (choice === 'f') {
-        const scanOptions = { entropyThreshold };
         const freshResults = scanFiles(getStagedFiles(), scanOptions);
         if (freshResults.totalFindings === 0) {
           console.log('\n  No findings to fix.\n');
@@ -376,14 +396,15 @@ async function handleScan(files, options) {
         }
 
         console.log('');
-        process.exit(fixResult.fixed > 0 ? 0 : 1);
+        exitAfterRemediation(filesToScan, fixResult.modifiedFiles || [], scanOptions, isPreCommitHook);
       } else if (choice === 'i') {
-        await runInteractive(allFindings, {
+        const iResult = await runInteractive(allFindings, {
           color: useColor,
           repoDir: process.cwd(),
           context_lines: contextLines,
         });
-        process.exit(1);
+        const mFiles = iResult ? iResult.modifiedFiles || [] : [];
+        exitAfterRemediation(filesToScan, mFiles, scanOptions, isPreCommitHook);
       } else {
         process.exit(1);
       }

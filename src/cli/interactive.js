@@ -143,6 +143,7 @@ async function runInteractive(findings, options = {}) {
   const repoDir  = options.repoDir || process.cwd();
 
   const summary = { fixed: 0, ignored: 0, vaulted: 0, skipped: 0, responded: 0 };
+  const modifiedFiles = [];
 
   for (let i = 0; i < findings.length; i++) {
     const finding = findings[i];
@@ -247,6 +248,7 @@ async function runInteractive(findings, options = {}) {
       const result = fixer.fixFinding(finding, finding.file, { repoDir });
       if (result && result.fixed) {
         summary.fixed++;
+        modifiedFiles.push(finding.file);
         console.log(
           `  ${c(useColor, GREEN, '✓')} Fixed — secret extracted to .env` +
           (result.envEntry ? ` as ${result.envEntry.varName}` : '')
@@ -321,6 +323,8 @@ async function runInteractive(findings, options = {}) {
     console.log(`  No actions taken`);
   }
   console.log('');
+
+  return { summary, modifiedFiles };
 }
 
 // ─── Exports ─────────────────────────────────────────────────────────────────
