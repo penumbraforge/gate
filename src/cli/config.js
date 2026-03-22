@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const yaml = require('js-yaml');
 
 const DEFAULT_MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
@@ -43,22 +44,61 @@ const DEFAULTS = {
   },
 };
 
+// Keys that get deep-merged (display/behavior preferences)
+const DEEP_MERGE_KEYS = new Set(['output', 'hooks']);
+
+function loadUserConfig(homeDir) {
+  homeDir = homeDir || os.homedir();
+  const configPath = path.join(homeDir, '.config', 'gate', 'config.yaml');
+
+  if (!fs.existsSync(configPath)) return {};
+
+  try {
+    const raw = fs.readFileSync(configPath, 'utf8');
+    const parsed = yaml.load(raw, { schema: yaml.FAILSAFE_SCHEMA });
+    return (parsed && typeof parsed === 'object') ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function mergeConfigs(userConfig, projectConfig) {
+  const result = { ...userConfig };
+
+  for (const key of Object.keys(projectConfig)) {
+    if (DEEP_MERGE_KEYS.has(key) && typeof result[key] === 'object' && typeof projectConfig[key] === 'object') {
+      result[key] = { ...result[key], ...projectConfig[key] };
+    } else {
+      result[key] = projectConfig[key];
+    }
+  }
+
+  return result;
+}
+
 function loadConfig(dir) {
   dir = dir || process.cwd();
-  const configPath = path.join(dir, '.gaterc');
-  let userConfig = {};
 
+  // Load user-level config
+  const rawUserConfig = loadUserConfig();
+
+  // Load project-level config
+  let rawProjectConfig = {};
+  const configPath = path.join(dir, '.gaterc');
   if (fs.existsSync(configPath)) {
     try {
       const raw = fs.readFileSync(configPath, 'utf8');
       const parsed = yaml.load(raw, { schema: yaml.FAILSAFE_SCHEMA });
       if (parsed && typeof parsed === 'object') {
-        userConfig = parsed;
+        rawProjectConfig = parsed;
       }
     } catch (err) {
       console.error(`gate: Invalid .gaterc: ${err.message}. Run 'gate init' to generate a valid config.`);
     }
   }
+
+  // Merge: user defaults < project overrides
+  const userConfig = mergeConfigs(rawUserConfig, rawProjectConfig);
 
   const customRules = [];
   if (Array.isArray(userConfig.rules)) {
@@ -176,4 +216,4 @@ function getDefaultIgnorePatterns(stacks) {
   return patterns;
 }
 
-module.exports = { loadConfig, detectStack, getDefaultIgnorePatterns, DEFAULTS, parseFileSize, DEFAULT_MAX_FILE_SIZE };
+module.exports = { loadConfig, loadUserConfig, mergeConfigs, detectStack, getDefaultIgnorePatterns, DEFAULTS, parseFileSize, DEFAULT_MAX_FILE_SIZE };

@@ -195,6 +195,55 @@ describe('config', () => {
   });
 });
 
+describe('config hierarchy', () => {
+  const os = require('os');
+  const fs = require('fs');
+  const path = require('path');
+
+  beforeEach(() => {
+    jest.resetModules();
+  });
+
+  test('mergeConfigs deep merges output settings', () => {
+    const { mergeConfigs } = require('../config');
+    const user = { output: { color: 'true', context_lines: '3' } };
+    const project = { output: { format: 'sarif' } };
+    const merged = mergeConfigs(user, project);
+    expect(merged.output.color).toBe('true');
+    expect(merged.output.context_lines).toBe('3');
+    expect(merged.output.format).toBe('sarif');
+  });
+
+  test('mergeConfigs shallow replaces severity', () => {
+    const { mergeConfigs } = require('../config');
+    const user = { severity: { 'aws-access-key-id': 'high' } };
+    const project = { severity: { 'aws-access-key-id': 'critical', 'github-pat': 'high' } };
+    const merged = mergeConfigs(user, project);
+    expect(merged.severity['aws-access-key-id']).toBe('critical');
+    expect(merged.severity['github-pat']).toBe('high');
+  });
+
+  test('loadUserConfig returns empty object for missing config', () => {
+    const { loadUserConfig } = require('../config');
+    const config = loadUserConfig('/nonexistent/path');
+    expect(config).toEqual({});
+  });
+
+  test('loadUserConfig reads from ~/.config/gate/config.yaml', () => {
+    const { loadUserConfig } = require('../config');
+    const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-home-'));
+    const configDir = path.join(tmpHome, '.config', 'gate');
+    fs.mkdirSync(configDir, { recursive: true });
+    fs.writeFileSync(path.join(configDir, 'config.yaml'), 'entropy_threshold: "3.5"\noutput:\n  color: "true"');
+
+    const userConfig = loadUserConfig(tmpHome);
+    expect(userConfig.entropy_threshold).toBe('3.5');
+    expect(userConfig.output.color).toBe('true');
+
+    fs.rmSync(tmpHome, { recursive: true });
+  });
+});
+
 describe('parseFileSize', () => {
   let parseFileSize, DEFAULT_MAX_FILE_SIZE;
 
