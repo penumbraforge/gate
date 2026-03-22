@@ -36,7 +36,7 @@ describe('installer', () => {
     fs.rmSync(dir, { recursive: true });
   });
 
-  test('installs pre-push hook — creates .git/hooks/pre-push with gate scan --all', () => {
+  test('installs pre-push hook — creates .git/hooks/pre-push with gate scan --changed', () => {
     const dir = createTempDir();
     gitInit(dir);
 
@@ -48,7 +48,7 @@ describe('installer', () => {
     const content = fs.readFileSync(hookPath, 'utf8');
     expect(content).toContain('#!/bin/sh');
     expect(content).toContain('gate');
-    expect(content).toContain('--all');
+    expect(content).toContain('--changed');
 
     fs.rmSync(dir, { recursive: true });
   });
@@ -172,5 +172,18 @@ describe('installer', () => {
     const section = generateHookSection('pre-commit');
     expect(section).toContain('GATE_NODE="$(find_gate_node)"');
     expect(section).toContain('$GATE_NODE $REPO_DIR/bin/gate.js');
+  });
+
+  test('pre-push hook uses --changed flag', () => {
+    const { generateHookSection } = require('../installer');
+    const section = generateHookSection('pre-push');
+    expect(section).toContain('scan --changed');
+    expect(section).not.toContain('scan --all');
+  });
+
+  test('pre-commit hook still uses --staged flag', () => {
+    const { generateHookSection } = require('../installer');
+    const section = generateHookSection('pre-commit');
+    expect(section).toContain('scan --staged');
   });
 });

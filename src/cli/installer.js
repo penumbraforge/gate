@@ -76,9 +76,9 @@ function getHooksDir(cwd) {
  */
 function generateHookSection(hookType) {
   const isPush = hookType === 'pre-push';
-  const scanArgs = isPush ? '--all' : '--staged';
+  const scanArgs = isPush ? '--changed' : '--staged';
   const description = isPush
-    ? 'Scans all tracked files for secrets before push'
+    ? 'Scans files changed since upstream branch before push'
     : 'Scans staged files for secrets before commit';
 
   return `${GATE_SECTION_START}

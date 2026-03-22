@@ -17,13 +17,13 @@ const {
 } = require('../src/cli/scanner');
 const { recordScan, readAuditLog, queryAuditLog, exportAuditLog, getStatistics, verifyIntegrity, clearAuditLog } =
   require('../src/cli/audit');
-const { install, uninstall, isInstalled } = require('../src/cli/installer');
+const { install, uninstall, isInstalled, getHookPath } = require('../src/cli/installer');
 const { checkForUpdate, checkForUpdateSync, runUpdate } = require('../src/cli/updater');
 const { keygen, encrypt: vaultEncrypt, decrypt: vaultDecrypt, encryptEnvFile } = require('../src/cli/vault');
 const { getRemediation } = require('../src/cli/remediation');
 const { loadConfig } = require('../src/cli/config');
 const { loadIgnorePatterns } = require('../src/cli/ignore');
-const { formatHeader, formatFinding, formatSummary, formatForCI, detectCI, shouldUseColor, createSpinner } = require('../src/cli/output');
+const { formatHeader, formatFinding, formatSummary, formatForCI, detectCI, shouldUseColor, createSpinner, formatBanner, formatScanHeader, formatFindingCounter } = require('../src/cli/output');
 const { runInit } = require('../src/cli/init');
 const { getStatus, formatStatus } = require('../src/cli/status');
 const { assessExposure, formatExposure } = require('../src/cli/exposure');
@@ -79,6 +79,7 @@ Usage:
 Scan Options:
   --all                Scan all tracked files
   --staged             Scan staged files (default)
+  --changed            Scan files changed since upstream branch
   --history <N>        Scan last N commits for secrets in history
   --verify             Verify if detected credentials are live
   --no-verify          Skip credential verification
@@ -268,7 +269,46 @@ async function handleScan(files, options) {
 
   if (spinner) spinner.start('Discovering files...');
 
-  if (options.all) {
+  // --changed: scan only files changed since upstream branch
+  let filePaths = null;
+  if (options.changed) {
+    try {
+      const changedOutput = execSync('git diff --name-only @{upstream}...HEAD', {
+        encoding: 'utf8',
+        stdio: ['pipe', 'pipe', 'ignore'],
+      }).trim();
+      if (changedOutput) {
+        filePaths = changedOutput.split('\n').filter(f => f.length > 0)
+          .map(f => path.resolve(process.cwd(), f));
+      } else {
+        filePaths = []; // no changes
+      }
+    } catch {
+      // No upstream or git error — fall back to scanning all files
+      // (This handles first push, no tracking branch, etc.)
+      filePaths = null; // will trigger the existing scanAll path
+    }
+  }
+
+  if (filePaths !== null && options.changed) {
+    if (filePaths.length === 0) {
+      if (spinner) spinner.stop();
+      console.log('No changed files to scan.');
+      process.exit(0);
+    }
+
+    if (spinner) spinner.update(`Scanning ${filePaths.length} changed files...`);
+    const startTime = Date.now();
+    results = scanFiles(filePaths, {
+      ...scanOptions,
+      onProgress: spinner ? (i, total, file) => {
+        spinner.update(`Scanning ${i + 1}/${total} files... (${path.basename(file)})`);
+      } : undefined,
+    });
+    filesToScan = filePaths;
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    if (spinner) spinner.succeed(`Scanned ${filePaths.length} changed files in ${elapsed}s`);
+  } else if (options.all) {
     const startTime = Date.now();
     results = scanAll({
       ...scanOptions,
