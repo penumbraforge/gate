@@ -155,9 +155,66 @@ function detectCI() {
   return null;
 }
 
+const SPINNER_FRAMES = ['\u280b', '\u2819', '\u2839', '\u2838', '\u283c', '\u2834', '\u2826', '\u2827', '\u2807', '\u280f'];
+const SPINNER_INTERVAL = 80;
+
+function createSpinner(options = {}) {
+  const stream = options.stream || process.stderr;
+  const isTTY = stream.isTTY !== undefined ? stream.isTTY : false;
+  let intervalId = null;
+  let frameIndex = 0;
+  let currentText = '';
+
+  function clear() {
+    if (isTTY) {
+      stream.write('\r\x1b[2K');
+    }
+  }
+
+  function render() {
+    if (!isTTY) return;
+    clear();
+    stream.write(`  \x1b[36m${SPINNER_FRAMES[frameIndex]}\x1b[0m ${currentText}`);
+    frameIndex = (frameIndex + 1) % SPINNER_FRAMES.length;
+  }
+
+  return {
+    start(text) {
+      currentText = text;
+      if (isTTY) {
+        render();
+        intervalId = setInterval(render, SPINNER_INTERVAL);
+      } else {
+        stream.write(`  ${text}\n`);
+      }
+    },
+
+    update(text) {
+      currentText = text;
+    },
+
+    succeed(text) {
+      if (intervalId) { clearInterval(intervalId); intervalId = null; }
+      clear();
+      stream.write(`  \x1b[32m\u2713\x1b[0m ${text}\n`);
+    },
+
+    fail(text) {
+      if (intervalId) { clearInterval(intervalId); intervalId = null; }
+      clear();
+      stream.write(`  \x1b[31m\u2717\x1b[0m ${text}\n`);
+    },
+
+    stop() {
+      if (intervalId) { clearInterval(intervalId); intervalId = null; }
+      clear();
+    },
+  };
+}
+
 module.exports = {
   shouldUseColor, formatSeverity, formatCodeContext, formatUnderline,
   formatFinding, formatHeader, formatSummary, formatForCI, detectCI,
-  formatVerificationBadge, formatExposureLabel, redactSecret,
+  formatVerificationBadge, formatExposureLabel, redactSecret, createSpinner,
   RED, YELLOW, CYAN, DIM, BOLD, RESET, RED_BG, GREEN,
 };

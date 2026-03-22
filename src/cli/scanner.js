@@ -383,7 +383,11 @@ function scanFiles(filePaths, options = {}) {
     },
   };
 
-  for (const filePath of filePaths) {
+  for (let i = 0; i < filePaths.length; i++) {
+    const filePath = filePaths[i];
+    if (options.onProgress) {
+      options.onProgress(i, filePaths.length, filePath);
+    }
     const fileResults = scanFile(filePath, scanOptions);
 
     // Compute the relative path for ignore matching

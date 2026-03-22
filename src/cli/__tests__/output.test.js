@@ -99,3 +99,83 @@ describe('output', () => {
     expect(result).toContain('2 secrets found');
   });
 });
+
+describe('createSpinner', () => {
+  const { createSpinner } = require('../output');
+
+  test('exports createSpinner function', () => {
+    expect(typeof createSpinner).toBe('function');
+  });
+
+  test('returns object with start, update, succeed, fail, stop methods', () => {
+    const spinner = createSpinner({ stream: { isTTY: false, write: () => {} } });
+    expect(typeof spinner.start).toBe('function');
+    expect(typeof spinner.update).toBe('function');
+    expect(typeof spinner.succeed).toBe('function');
+    expect(typeof spinner.fail).toBe('function');
+    expect(typeof spinner.stop).toBe('function');
+  });
+
+  test('succeed outputs checkmark and message on non-TTY', () => {
+    const output = [];
+    const mockStream = { isTTY: false, write: (s) => output.push(s) };
+    const spinner = createSpinner({ stream: mockStream });
+    spinner.succeed('Done in 1.2s');
+    expect(output.join('')).toContain('Done in 1.2s');
+  });
+
+  test('start outputs text once on non-TTY', () => {
+    const output = [];
+    const mockStream = { isTTY: false, write: (s) => output.push(s) };
+    const spinner = createSpinner({ stream: mockStream });
+    spinner.start('Loading...');
+    expect(output.length).toBe(1);
+    expect(output[0]).toContain('Loading...');
+    spinner.stop();
+  });
+
+  test('fail outputs cross mark and message on non-TTY', () => {
+    const output = [];
+    const mockStream = { isTTY: false, write: (s) => output.push(s) };
+    const spinner = createSpinner({ stream: mockStream });
+    spinner.fail('Something went wrong');
+    expect(output.join('')).toContain('Something went wrong');
+  });
+
+  test('stop clears interval without error', () => {
+    const mockStream = { isTTY: false, write: () => {} };
+    const spinner = createSpinner({ stream: mockStream });
+    spinner.start('Test');
+    spinner.stop();
+    // Should not throw
+  });
+
+  test('update changes current text without writing on non-TTY', () => {
+    const output = [];
+    const mockStream = { isTTY: false, write: (s) => output.push(s) };
+    const spinner = createSpinner({ stream: mockStream });
+    spinner.start('First');
+    const countAfterStart = output.length;
+    spinner.update('Second');
+    // update should not produce additional output on non-TTY
+    expect(output.length).toBe(countAfterStart);
+    spinner.stop();
+  });
+
+  test('TTY mode renders spinner frames', () => {
+    jest.useFakeTimers();
+    const output = [];
+    const mockStream = { isTTY: true, write: (s) => output.push(s) };
+    const spinner = createSpinner({ stream: mockStream });
+    spinner.start('Working...');
+    // Initial render writes something
+    expect(output.length).toBeGreaterThan(0);
+    expect(output.join('')).toContain('Working...');
+    // Advance timer to trigger another frame
+    jest.advanceTimersByTime(80);
+    const countAfterTick = output.length;
+    expect(countAfterTick).toBeGreaterThan(1);
+    spinner.stop();
+    jest.useRealTimers();
+  });
+});

@@ -23,7 +23,7 @@ const { keygen, encrypt: vaultEncrypt, decrypt: vaultDecrypt, encryptEnvFile } =
 const { getRemediation } = require('../src/cli/remediation');
 const { loadConfig } = require('../src/cli/config');
 const { loadIgnorePatterns } = require('../src/cli/ignore');
-const { formatHeader, formatFinding, formatSummary, formatForCI, detectCI, shouldUseColor } = require('../src/cli/output');
+const { formatHeader, formatFinding, formatSummary, formatForCI, detectCI, shouldUseColor, createSpinner } = require('../src/cli/output');
 const { runInit } = require('../src/cli/init');
 const { getStatus, formatStatus } = require('../src/cli/status');
 const { assessExposure, formatExposure } = require('../src/cli/exposure');
@@ -252,28 +252,51 @@ async function handleScan(files, options) {
   let results;
   let filesToScan = [];
   const scanOptions = { entropyThreshold };
+  const useSpinner = outputFormat === 'text';
+  const spinner = useSpinner ? createSpinner() : null;
 
   // Check git availability when we need it (not when specific files are passed)
   if (files.length === 0) {
     try {
       execSync('git rev-parse --is-inside-work-tree', { stdio: 'ignore' });
     } catch {
+      if (spinner) spinner.fail('Git not found or not in a git repository.');
       console.error("gate: Git not found or not in a git repository. Install git or use 'gate scan <file>' for direct file scanning.");
       process.exit(1);
     }
   }
 
+  if (spinner) spinner.start('Discovering files...');
+
   if (options.all) {
-    results = scanAll(scanOptions);
+    const startTime = Date.now();
+    results = scanAll({
+      ...scanOptions,
+      onProgress: spinner ? (i, total, file) => {
+        spinner.update(`Scanning ${i + 1}/${total} files... (${path.basename(file)})`);
+      } : undefined,
+    });
     filesToScan = results.filesScanned.map(f => f.file);
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    if (spinner) spinner.succeed(`Scanned ${filesToScan.length} files in ${elapsed}s`);
   } else {
     filesToScan = files.length > 0 ? files : getStagedFiles();
     if (filesToScan.length === 0) {
+      if (spinner) spinner.stop();
       console.log('No staged files to scan.');
       process.exit(0);
     }
 
-    results = scanFiles(filesToScan, scanOptions);
+    if (spinner) spinner.update(`Scanning ${filesToScan.length} files...`);
+    const startTime = Date.now();
+    results = scanFiles(filesToScan, {
+      ...scanOptions,
+      onProgress: spinner ? (i, total, file) => {
+        spinner.update(`Scanning ${i + 1}/${total} files... (${path.basename(file)})`);
+      } : undefined,
+    });
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    if (spinner) spinner.succeed(`Scanned ${filesToScan.length} files in ${elapsed}s`);
   }
 
   // Collect all findings with file reference
