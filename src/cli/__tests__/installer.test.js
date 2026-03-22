@@ -154,4 +154,23 @@ describe('installer', () => {
 
     fs.rmSync(dir, { recursive: true });
   });
+
+  test('hook template contains Node resolution chain', () => {
+    const { generateHookSection } = require('../installer');
+    const section = generateHookSection('pre-commit');
+
+    expect(section).toContain('GATE_NODE_PATH');
+    expect(section).toContain('nvm');
+    expect(section).toContain('.fnm');
+    expect(section).toContain('.volta');
+    expect(section).toContain('/opt/homebrew/bin/node');
+    expect(section).toContain('Node.js not found');
+  });
+
+  test('hook template uses GATE_NODE for running gate', () => {
+    const { generateHookSection } = require('../installer');
+    const section = generateHookSection('pre-commit');
+    expect(section).toContain('GATE_NODE="$(find_gate_node)"');
+    expect(section).toContain('$GATE_NODE $REPO_DIR/bin/gate.js');
+  });
 });

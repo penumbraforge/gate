@@ -93,9 +93,22 @@ fi
 
 export GATE_PRE_COMMIT=1
 
-# Verify Node.js is available
-if ! command -v node >/dev/null 2>&1; then
-  echo "Error: Node.js is not installed or not in PATH"
+# Find Node.js — checks explicit override, PATH, nvm, fnm, volta, common locations
+find_gate_node() {
+  if [ -n "$GATE_NODE_PATH" ] && [ -x "$GATE_NODE_PATH" ]; then echo "$GATE_NODE_PATH"; return; fi
+  command -v node 2>/dev/null && return
+  if [ -s "\${NVM_DIR:-$HOME/.nvm}/nvm.sh" ]; then . "\${NVM_DIR:-$HOME/.nvm}/nvm.sh" 2>/dev/null; command -v node 2>/dev/null && return; fi
+  if [ -x "$HOME/.fnm/fnm" ]; then eval "$("$HOME/.fnm/fnm" env 2>/dev/null)"; command -v node 2>/dev/null && return; fi
+  if [ -x "$HOME/.volta/bin/node" ]; then echo "$HOME/.volta/bin/node"; return; fi
+  for p in /usr/local/bin/node /opt/homebrew/bin/node; do
+    [ -x "$p" ] && echo "$p" && return
+  done
+  return 1
+}
+
+GATE_NODE="$(find_gate_node)"
+if [ -z "$GATE_NODE" ]; then
+  echo "Gate: Node.js not found. Install Node 18+ or set GATE_NODE_PATH=/path/to/node"
   exit 1
 fi
 
@@ -105,7 +118,7 @@ HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(cd "$HOOK_DIR/../.." && pwd)"
 
 if [ -f "$REPO_DIR/bin/gate.js" ]; then
-  GATE_BIN="node $REPO_DIR/bin/gate.js"
+  GATE_BIN="$GATE_NODE $REPO_DIR/bin/gate.js"
 elif [ -f "$REPO_DIR/node_modules/.bin/gate" ]; then
   GATE_BIN="$REPO_DIR/node_modules/.bin/gate"
 elif [ -f "$HOME/.gate/bin/gate" ]; then
