@@ -1,3 +1,5 @@
+[![CI](https://github.com/penumbraforge/gate/actions/workflows/ci.yml/badge.svg)](https://github.com/penumbraforge/gate/actions/workflows/ci.yml)
+
 # Gate
 
 **The first secret scanner that fixes what it finds. For free.**
@@ -11,6 +13,26 @@ npx gate            # Install pre-commit hook (one command, done)
 gate scan --all     # Scan your entire repo
 gate fix            # Auto-fix all findings
 ```
+
+### What happens on first run
+
+```
+$ npx @penumbraforge/gate
+
+  ┌─────────────────────────────────────────┐
+  │  Gate v2.0.0 — secret scanner + fixer   │
+  │                                         │
+  │  ✓ Pre-commit hook installed            │
+  │  ✓ 281 detection rules loaded           │
+  │  ✓ Zero config needed                   │
+  │                                         │
+  │  Scanning your repo now...              │
+  └─────────────────────────────────────────┘
+
+  ✓ Scanned 387 files in 1.2s
+```
+
+That's it. Every commit is now protected.
 
 ## What Makes Gate Different
 
@@ -58,6 +80,8 @@ gate version           Show version
 gate help              Show all commands
 ```
 
+> **Tip:** Run `gate <command> --help` for detailed usage of any command.
+
 ## Features
 
 - **281 detection rules** -- AWS, GCP, Azure, GitHub, Stripe, AI keys, databases, private keys, PII, and more
@@ -74,7 +98,7 @@ gate help              Show all commands
 
 ```bash
 npx gate                        # Zero-install (runs via npx)
-npm install -g @penumbra/gate   # Global install
+npm install -g @penumbraforge/gate   # Global install
 brew install gate               # Homebrew (coming soon)
 ```
 
