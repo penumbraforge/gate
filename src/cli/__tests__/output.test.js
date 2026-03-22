@@ -179,3 +179,56 @@ describe('createSpinner', () => {
     jest.useRealTimers();
   });
 });
+
+describe('formatBanner', () => {
+  const { formatBanner } = require('../output');
+
+  test('includes version and rule count', () => {
+    const banner = formatBanner('2.0.0', 281, false);
+    expect(banner).toContain('Gate v2.0.0');
+    expect(banner).toContain('281');
+    expect(banner).toContain('Pre-commit hook installed');
+  });
+
+  test('includes box drawing characters', () => {
+    const banner = formatBanner('2.0.0', 281, false);
+    expect(banner).toContain('\u250c');
+    expect(banner).toContain('\u2514');
+  });
+});
+
+describe('output polish', () => {
+  const { formatScanHeader, formatFindingCounter, formatSummary } = require('../output');
+
+  test('formatScanHeader includes version and file count', () => {
+    const header = formatScanHeader('2.0.0', 281, 387, false);
+    expect(header).toContain('Gate v2.0.0');
+    expect(header).toContain('281 rules');
+    expect(header).toContain('387 files');
+  });
+
+  test('formatFindingCounter shows index and total', () => {
+    const counter = formatFindingCounter(1, 7, 'critical', 'aws-secret-access-key', false);
+    expect(counter).toContain('[1/7]');
+    expect(counter).toContain('CRITICAL');
+    expect(counter).toContain('aws-secret-access-key');
+  });
+
+  test('formatSummary includes timing when provided', () => {
+    const counts = { critical: 3, high: 2, medium: 1, low: 1, total: 7 };
+    const summary = formatSummary(counts, false, { fileCount: 4, elapsed: '1.2' });
+    expect(summary).toContain('1.2s');
+  });
+
+  test('formatSummary includes file count when provided', () => {
+    const counts = { critical: 3, high: 2, medium: 1, low: 1, total: 7 };
+    const summary = formatSummary(counts, false, { fileCount: 4, elapsed: '1.2' });
+    expect(summary).toContain('in 4 files');
+  });
+
+  test('formatSummary works without extra params (backward compat)', () => {
+    const counts = { critical: 0, high: 0, medium: 0, low: 0, total: 0 };
+    const summary = formatSummary(counts, false);
+    expect(summary).toContain('no secrets found');
+  });
+});

@@ -118,7 +118,7 @@ function formatHeader(count, useColor) {
   return `\n  gate \u2500\u2500 ${label} ${line.slice(label.length + 10)}\n`;
 }
 
-function formatSummary(counts, useColor) {
+function formatSummary(counts, useColor, extra = {}) {
   const parts = [];
   const items = [];
   if (counts.critical > 0) items.push(`${counts.critical} critical`);
@@ -129,9 +129,17 @@ function formatSummary(counts, useColor) {
   const line = useColor ? `${DIM}${'\u2500'.repeat(50)}${RESET}` : '\u2500'.repeat(50);
   parts.push(`  ${line}`);
   if (counts.total === 0) {
-    parts.push(`  ${useColor ? GREEN : ''}no secrets found${useColor ? RESET : ''}`);
+    const suffix = [];
+    if (extra.fileCount) suffix.push(`in ${extra.fileCount} files`);
+    if (extra.elapsed) suffix.push(`${extra.elapsed}s`);
+    const suffixStr = suffix.length > 0 ? ` — ${suffix.join(', ')}` : '';
+    parts.push(`  ${useColor ? GREEN : ''}no secrets found${suffixStr}${useColor ? RESET : ''}`);
   } else {
-    parts.push(`  commit blocked \u00b7 ${items.join(' \u00b7 ')}`);
+    const suffix = [];
+    if (extra.fileCount) suffix.push(`in ${extra.fileCount} files`);
+    if (extra.elapsed) suffix.push(`${extra.elapsed}s`);
+    const suffixStr = suffix.length > 0 ? ` — ${suffix.join(', ')}` : '';
+    parts.push(`  commit blocked \u00b7 ${items.join(' \u00b7 ')}${suffixStr}`);
     parts.push('');
     parts.push('  run gate fix to auto-remediate');
     parts.push('  run gate scan --interactive for guided walkthrough');
@@ -212,9 +220,43 @@ function createSpinner(options = {}) {
   };
 }
 
+function formatBanner(version, ruleCount, useColor) {
+  const g = useColor ? GREEN : '';
+  const b = useColor ? BOLD : '';
+  const d = useColor ? DIM : '';
+  const r = useColor ? RESET : '';
+  const lines = [
+    `${d}  ┌─────────────────────────────────────────┐${r}`,
+    `${d}  │${r}  ${b}Gate v${version}${r} — secret scanner + fixer   ${d}│${r}`,
+    `${d}  │${r}                                         ${d}│${r}`,
+    `${d}  │${r}  ${g}✓${r} Pre-commit hook installed            ${d}│${r}`,
+    `${d}  │${r}  ${g}✓${r} ${ruleCount} detection rules loaded           ${d}│${r}`,
+    `${d}  │${r}  ${g}✓${r} Zero config needed                   ${d}│${r}`,
+    `${d}  │${r}                                         ${d}│${r}`,
+    `${d}  │${r}  Scanning your repo now...              ${d}│${r}`,
+    `${d}  └─────────────────────────────────────────┘${r}`,
+  ];
+  return '\n' + lines.join('\n') + '\n';
+}
+
+function formatScanHeader(version, ruleCount, fileCount, useColor) {
+  const d = useColor ? DIM : '';
+  const b = useColor ? BOLD : '';
+  const r = useColor ? RESET : '';
+  return `\n  ${b}Gate v${version}${r} ${d}·${r} ${ruleCount} rules ${d}·${r} scanning ${fileCount} files\n`;
+}
+
+function formatFindingCounter(index, total, severity, ruleId, useColor) {
+  const d = useColor ? DIM : '';
+  const r = useColor ? RESET : '';
+  const sev = formatSeverity(severity, useColor);
+  return `  ${d}[${index}/${total}]${r} ${sev}  ${ruleId}`;
+}
+
 module.exports = {
   shouldUseColor, formatSeverity, formatCodeContext, formatUnderline,
   formatFinding, formatHeader, formatSummary, formatForCI, detectCI,
   formatVerificationBadge, formatExposureLabel, redactSecret, createSpinner,
+  formatBanner, formatScanHeader, formatFindingCounter,
   RED, YELLOW, CYAN, DIM, BOLD, RESET, RED_BG, GREEN,
 };

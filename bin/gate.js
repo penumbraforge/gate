@@ -113,6 +113,155 @@ Examples:
 `);
 }
 
+const COMMAND_HELP = {
+  scan: `
+Gate scan — detect secrets in your code
+
+Usage:
+  gate scan [files...]     Scan specific files
+  gate scan --staged       Scan staged files (default)
+  gate scan --all          Scan all tracked files
+  gate scan --changed      Scan files changed since upstream
+  gate scan --history <N>  Scan last N commits
+
+Options:
+  --verify                 Check if detected credentials are live
+  --no-verify              Skip credential verification
+  --interactive            Enter interactive remediation mode
+  --format <fmt>           Output: text (default), json, sarif
+  --no-color               Disable colored output
+  --entropy-threshold <N>  Entropy threshold (default: 4.8)
+  --max-file-size <size>   Max file size to scan (default: 2MB)
+
+Examples:
+  gate scan                          Scan staged files
+  gate scan --all --verify           Full scan with live check
+  gate scan --format sarif > out     SARIF for GitHub Code Scanning
+`,
+  fix: `
+Gate fix — auto-remediate detected secrets
+
+Usage:
+  gate fix                 Fix all findings (extract to .env)
+  gate fix --dry-run       Preview changes without modifying files
+  gate fix --undo          Revert the most recent fix
+
+Options:
+  --dry-run                Show what would change
+  --undo                   Restore files from before the last fix
+  --entropy-threshold <N>  Entropy threshold for scanning
+
+Examples:
+  gate fix                 Auto-fix all findings
+  gate fix --dry-run       Preview fixes first
+  gate fix --undo          Revert the last fix
+`,
+  report: `
+Gate report — generate compliance reports
+
+Usage:
+  gate report                  Generate Markdown report
+  gate report --format html    Generate HTML report
+  gate report --incident <id>  Generate incident report
+
+Options:
+  --format <fmt>           Report format: markdown (default), html, json
+  --incident <id>          Generate incident report for a specific incident
+
+Examples:
+  gate report                          Markdown compliance report
+  gate report --format html            HTML compliance report
+`,
+  vault: `
+Gate vault — local secret encryption (AES-256-GCM)
+
+Usage:
+  gate vault keygen [--force]    Generate vault key
+  gate vault encrypt <value>     Encrypt a value
+  gate vault decrypt <blob>      Decrypt a vault blob
+  gate vault env <file>          Encrypt all .env values
+
+Examples:
+  gate vault keygen              Generate a new vault key
+  gate vault encrypt "s3cr3t"    Encrypt a secret
+  gate vault env .env            Encrypt all values in .env
+`,
+  audit: `
+Gate audit — view and query the audit log
+
+Usage:
+  gate audit                     Show recent audit entries
+  gate audit --stats             Show audit statistics
+  gate audit --verify            Verify audit log integrity
+  gate audit --export [format]   Export log (json)
+  gate audit --clear             Delete the audit log
+
+Options:
+  --since <date>           Filter entries since date (e.g. 7d, 2w, 3m)
+  --until <date>           Filter entries until date
+  --filter <key=value>     Filter by field
+  --stats                  Show aggregate statistics
+  --verify                 Verify SHA-256 integrity chain
+  --clear                  Permanently delete audit log
+
+Examples:
+  gate audit --since 7d          Last 7 days of scans
+  gate audit --stats             Show scan statistics
+`,
+  install: `
+Gate install — install git pre-commit hook
+
+Usage:
+  gate install             Install pre-commit hook
+
+The hook runs gate scan --staged before each commit,
+blocking commits that contain secrets.
+
+Examples:
+  gate install             Install the hook
+`,
+  init: `
+Gate init — interactive project setup
+
+Usage:
+  gate init                Set up Gate for this project
+
+Creates .gateignore, installs the pre-commit hook,
+and detects your project's tech stack.
+
+Examples:
+  gate init                Set up Gate interactively
+`,
+  status: `
+Gate status — health check
+
+Usage:
+  gate status              Show Gate installation health
+
+Displays hook status, rule count, config, and
+recent scan history.
+
+Examples:
+  gate status              Check Gate health
+`,
+  purge: `
+Gate purge — generate git history purge script
+
+Usage:
+  gate purge               Generate git-filter-repo script
+
+Scans git history for secrets and generates a script
+to remove them using git-filter-repo.
+
+Options:
+  --history <N>            Number of commits to scan (default: 50)
+
+Examples:
+  gate purge               Generate purge script
+  gate purge --history 100 Scan last 100 commits
+`,
+};
+
 /**
  * Parse command-line arguments
  *
@@ -152,6 +301,8 @@ function parseArgs() {
       parsed.files.push(arg);
     }
   }
+
+  parsed.options.help = args.includes('--help') || args.includes('-h');
 
   return parsed;
 }
@@ -252,6 +403,7 @@ async function handleScan(files, options) {
   // Determine files to scan
   let results;
   let filesToScan = [];
+  let scanElapsed = null;
   const scanOptions = { entropyThreshold };
   const useSpinner = outputFormat === 'text';
   const spinner = useSpinner ? createSpinner() : null;
@@ -306,8 +458,8 @@ async function handleScan(files, options) {
       } : undefined,
     });
     filesToScan = filePaths;
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    if (spinner) spinner.succeed(`Scanned ${filePaths.length} changed files in ${elapsed}s`);
+    scanElapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    if (spinner) spinner.succeed(`Scanned ${filePaths.length} changed files in ${scanElapsed}s`);
   } else if (options.all) {
     const startTime = Date.now();
     results = scanAll({
@@ -317,8 +469,8 @@ async function handleScan(files, options) {
       } : undefined,
     });
     filesToScan = results.filesScanned.map(f => f.file);
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    if (spinner) spinner.succeed(`Scanned ${filesToScan.length} files in ${elapsed}s`);
+    scanElapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    if (spinner) spinner.succeed(`Scanned ${filesToScan.length} files in ${scanElapsed}s`);
   } else {
     filesToScan = files.length > 0 ? files : getStagedFiles();
     if (filesToScan.length === 0) {
@@ -335,8 +487,8 @@ async function handleScan(files, options) {
         spinner.update(`Scanning ${i + 1}/${total} files... (${path.basename(file)})`);
       } : undefined,
     });
-    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    if (spinner) spinner.succeed(`Scanned ${filesToScan.length} files in ${elapsed}s`);
+    scanElapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    if (spinner) spinner.succeed(`Scanned ${filesToScan.length} files in ${scanElapsed}s`);
   }
 
   // Collect all findings with file reference
@@ -386,13 +538,21 @@ async function handleScan(files, options) {
     }
   }
 
+  // Load rule count for scan header
+  const { RULES } = require('../src/cli/rules');
+  const scanExtra = { fileCount: filesToScan.length, elapsed: scanElapsed };
+
   // Text output
   if (results.totalFindings > 0) {
+    // Scan header
+    console.log(formatScanHeader(VERSION, RULES.length, filesToScan.length, useColor));
+
     // Header
     console.log(formatHeader(results.totalFindings, useColor));
 
     // Each finding with code context
-    for (const finding of allFindings) {
+    for (let fi = 0; fi < allFindings.length; fi++) {
+      const finding = allFindings[fi];
       let fileLines = [];
       try {
         fileLines = fs.readFileSync(finding.file, 'utf8').split('\n');
@@ -400,6 +560,7 @@ async function handleScan(files, options) {
         // File may not be readable — skip context
       }
 
+      console.log(formatFindingCounter(fi + 1, allFindings.length, finding.severity || 'medium', finding.ruleId, useColor));
       console.log(formatFinding(finding, fileLines, {
         color: useColor,
         context_lines: contextLines,
@@ -409,7 +570,7 @@ async function handleScan(files, options) {
 
     // Summary
     const counts = { ...results.severityCounts, total: results.totalFindings };
-    console.log(formatSummary(counts, useColor));
+    console.log(formatSummary(counts, useColor, scanExtra));
 
     // Record to audit log
     const commitHash = getCurrentCommitHash();
@@ -487,6 +648,8 @@ async function handleScan(files, options) {
     process.exit(1);
   } else {
     // No findings — clean
+    console.log(formatScanHeader(VERSION, RULES.length, filesToScan.length, useColor));
+
     const commitHash = getCurrentCommitHash();
     recordScan({
       commitHash,
@@ -497,7 +660,7 @@ async function handleScan(files, options) {
     });
 
     const counts = { critical: 0, high: 0, medium: 0, low: 0, total: 0 };
-    console.log(formatSummary(counts, useColor));
+    console.log(formatSummary(counts, useColor, scanExtra));
     process.exit(0);
   }
 }
@@ -781,16 +944,38 @@ async function handleAudit(options) {
 async function main() {
   const { command, files, options } = parseArgs();
 
+  // --help / -h flag
+  if (options.help) {
+    if (command && COMMAND_HELP[command]) {
+      console.log(COMMAND_HELP[command]);
+    } else {
+      printUsage();
+    }
+    process.exit(0);
+  }
+
   // No args — install hook or show status (skip if running as pre-commit hook)
   if (command === null) {
     if (process.env.GATE_PRE_COMMIT) {
       // Running as hook with no command — do nothing
       return;
     }
-    if (isInstalled()) {
-      await handleStatus();
+
+    // Check for Gate's sentinel (not just any hook file — husky/lint-staged may exist)
+    const hookPath = getHookPath('pre-commit');
+    const gateWasInstalled = hookPath && fs.existsSync(hookPath) &&
+      fs.readFileSync(hookPath, 'utf8').includes('Gate hook');
+
+    if (!gateWasInstalled) {
+      const hookResult = install('pre-commit');
+      if (hookResult.success) {
+        const { RULES } = require('../src/cli/rules');
+        const colorSetting = !(process.argv.includes('--no-color'));
+        const useColor = shouldUseColor(colorSetting);
+        console.log(formatBanner(VERSION, RULES.length, useColor));
+      }
     } else {
-      handleInstall();
+      await handleStatus();
     }
     return;
   }
