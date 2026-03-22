@@ -56,7 +56,7 @@ function loadConfig(dir) {
         userConfig = parsed;
       }
     } catch (err) {
-      // Invalid YAML — fall back to defaults silently
+      console.error(`gate: Invalid .gaterc: ${err.message}. Run 'gate init' to generate a valid config.`);
     }
   }
 

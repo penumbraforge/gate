@@ -252,6 +252,17 @@ async function handleScan(files, options) {
   let results;
   let filesToScan = [];
   const scanOptions = { entropyThreshold };
+
+  // Check git availability when we need it (not when specific files are passed)
+  if (files.length === 0) {
+    try {
+      execSync('git rev-parse --is-inside-work-tree', { stdio: 'ignore' });
+    } catch {
+      console.error("gate: Git not found or not in a git repository. Install git or use 'gate scan <file>' for direct file scanning.");
+      process.exit(1);
+    }
+  }
+
   if (options.all) {
     results = scanAll(scanOptions);
     filesToScan = results.filesScanned.map(f => f.file);

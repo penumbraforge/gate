@@ -213,7 +213,7 @@ function install(hookType, cwd) {
   } catch (error) {
     return {
       success: false,
-      error: error.message,
+      error: `Cannot install ${hookType} hook: ${error.message}. Check .git/hooks/ permissions.`,
     };
   }
 }

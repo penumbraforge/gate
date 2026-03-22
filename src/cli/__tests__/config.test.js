@@ -51,8 +51,26 @@ describe('config', () => {
   test('handles invalid YAML gracefully', () => {
     const dir = createTempDir();
     fs.writeFileSync(path.join(dir, '.gaterc'), '{{{{invalid yaml');
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
     const config = loadConfig(dir);
     expect(config.entropy_threshold).toBe(4.8);
+    consoleSpy.mockRestore();
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  test('reports specific error for invalid YAML', () => {
+    const dir = createTempDir();
+    fs.writeFileSync(path.join(dir, '.gaterc'), 'invalid: yaml: [\\nnot closed');
+
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation();
+    const config = loadConfig(dir);
+
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringMatching(/Invalid .gaterc/));
+    consoleSpy.mockRestore();
+
+    // Should still return defaults
+    expect(config.entropy_threshold).toBe(4.8);
+
     fs.rmSync(dir, { recursive: true });
   });
 

@@ -299,7 +299,13 @@ function scanFile(filePath, options = {}) {
       results.findings.push(...lineFindings);
     }
   } catch (error) {
-    results.error = error.message;
+    if (error.code === 'EACCES') {
+      results.error = `Cannot read ${filePath}: Permission denied`;
+    } else if (error.code === 'ENOENT') {
+      results.error = `Cannot read ${filePath}: File not found`;
+    } else {
+      results.error = `Cannot read ${filePath}: ${error.message}`;
+    }
   }
 
   return results;
