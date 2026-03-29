@@ -8,7 +8,7 @@
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
-const { execSync } = require('child_process');
+const { execSync, execFileSync } = require('child_process');
 const {
   scanFiles,
   scanAll,
@@ -284,20 +284,29 @@ function parseArgs() {
   for (let i = 1; i < args.length; i++) {
     const arg = args[i];
 
-    if (arg.startsWith('--')) {
-      const key = arg.substring(2);
-      const nextArg = args[i + 1];
+    if (arg === '--') {
+      parsed.files.push(...args.slice(i + 1));
+      break;
+    }
 
-      if (nextArg && !nextArg.startsWith('--')) {
-        parsed.options[key] = nextArg;
-        i++;
+    if (arg.startsWith('--')) {
+      const eqIdx = arg.indexOf('=');
+      if (eqIdx !== -1) {
+        parsed.options[arg.substring(2, eqIdx)] = arg.substring(eqIdx + 1);
       } else {
-        parsed.options[key] = true;
+        const key = arg.substring(2);
+        const nextArg = args[i + 1];
+
+        if (nextArg && !nextArg.startsWith('-')) {
+          parsed.options[key] = nextArg;
+          i++;
+        } else {
+          parsed.options[key] = true;
+        }
       }
     } else if (arg.startsWith('-')) {
       parsed.options[arg.substring(1)] = true;
     } else {
-      // Assume it's a file
       parsed.files.push(arg);
     }
   }
@@ -351,7 +360,7 @@ function exitAfterRemediation(filesToScan, modifiedFiles, scanOptions, isPreComm
   if (residual.totalFindings === 0) {
     if (isPreCommitHook && modifiedFiles.length > 0) {
       try {
-        execSync(`git add ${modifiedFiles.map(f => `"${f}"`).join(' ')}`);
+        execFileSync('git', ['add', '--', ...modifiedFiles]);
         console.log(`  re-staged: ${modifiedFiles.join(', ')}`);
       } catch { /* best effort */ }
     }
@@ -622,7 +631,7 @@ async function handleScan(files, options) {
           if (modifiedFiles.length > 0) {
             const reResults = scanFiles(modifiedFiles, scanOptions);
             if (reResults.totalFindings === 0) {
-              execSync(`git add ${modifiedFiles.map(f => `"${f}"`).join(' ')}`);
+              execFileSync('git', ['add', '--', ...modifiedFiles]);
               console.log(`  re-staged: ${modifiedFiles.join(', ')}`);
             } else {
               console.log(`  ${reResults.totalFindings} finding(s) remain — files not re-staged.`);
@@ -881,7 +890,7 @@ async function handleAudit(options) {
 
   // Export audit log
   if (options.export) {
-    const format = options.export || 'json';
+    const format = typeof options.export === 'string' ? options.export : 'json';
     const exported = exportAuditLog(format);
     console.log(exported);
     return;

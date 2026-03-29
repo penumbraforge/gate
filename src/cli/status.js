@@ -90,7 +90,7 @@ async function getStatus(dir) {
   const version = pkg.version;
 
   // Hook status
-  const hookPreCommit = isInstalled();
+  const hookPreCommit = isInstalled('pre-commit', dir);
   const hookPrePush = checkPrePushHook(dir);
 
   // Config source

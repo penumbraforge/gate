@@ -13,7 +13,7 @@ const { EventEmitter } = require('events');
 
 // ─── Module-level mocks (variable names must start with "mock" per Jest) ────
 
-const mockFixer = { fixFinding: jest.fn() };
+const mockFixer = { fixFinding: jest.fn(), updateEnvFile: jest.fn(), ensureGitignore: jest.fn() };
 const mockVault = { encrypt: jest.fn() };
 const mockExposure = { assessExposure: jest.fn(), formatExposure: jest.fn() };
 const mockRemediation = { getRemediation: jest.fn(), getActionLabel: jest.fn() };

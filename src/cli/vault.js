@@ -17,7 +17,9 @@ const ALGORITHM = 'aes-256-gcm';
  */
 function ensureGateDir() {
   if (!fs.existsSync(GATE_DIR)) {
-    fs.mkdirSync(GATE_DIR, { recursive: true });
+    fs.mkdirSync(GATE_DIR, { recursive: true, mode: 0o700 });
+  } else {
+    try { fs.chmodSync(GATE_DIR, 0o700); } catch {}
   }
 }
 
@@ -62,14 +64,14 @@ function loadKey() {
  */
 function encrypt(plaintext) {
   const key = loadKey();
-  const iv = crypto.randomBytes(16);
+  const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv(ALGORITHM, key, iv);
 
   let ct = cipher.update(plaintext, 'utf8', 'hex');
   ct += cipher.final('hex');
   const authTag = cipher.getAuthTag().toString('hex');
 
-  const blob = JSON.stringify({ algo: ALGORITHM, iv: iv.toString('hex'), ct, authTag });
+  const blob = JSON.stringify({ v: 1, algo: ALGORITHM, iv: iv.toString('hex'), ct, authTag });
   return Buffer.from(blob).toString('base64');
 }
 

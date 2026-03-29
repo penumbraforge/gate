@@ -82,6 +82,13 @@ const ROTATION_INFO = {
     auditUrl: 'https://dashboard.heroku.com/account/security',
     auditInstructions: 'Heroku Dashboard → Account → Security → Recent activity. Look for unexpected deployments or config changes.',
   },
+  gitlab: {
+    cli: null,
+    webUrl: 'https://gitlab.com/-/user_settings/personal_access_tokens',
+    webSteps: 'User Settings → Access Tokens → Revoke the compromised token → Create new token with minimum scopes',
+    auditUrl: 'https://gitlab.com/-/user_settings/authentication_log',
+    auditInstructions: 'GitLab → User Settings → Authentication Log. Look for unexpected API activity or repository access.',
+  },
   slack: {
     cli: null,
     webUrl: 'https://api.slack.com/apps',
@@ -126,7 +133,8 @@ const RULE_TO_PROVIDER = {
   'azure-connection-string': 'azure',
   'azure-storage-key': 'azure',
   'heroku-token': 'heroku',
-  'gitlab-pat': 'github', // closest analog for rotation guidance
+  'gitlab-pat': 'gitlab',
+  'gitlab-pat-token': 'gitlab',
 };
 
 // ─── Compliance reference data ────────────────────────────────────────────────

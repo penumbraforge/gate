@@ -23,7 +23,7 @@ $ npx @penumbraforge/gate
   │  Gate v2.0.0 — secret scanner + fixer   │
   │                                         │
   │  ✓ Pre-commit hook installed            │
-  │  ✓ 281 detection rules loaded           │
+  │  ✓ 146 detection rules loaded           │
   │  ✓ Zero config needed                   │
   │                                         │
   │  Scanning your repo now...              │
@@ -38,7 +38,7 @@ That's it. Every commit is now protected.
 
 | Capability | Gitleaks | TruffleHog | GitHub | GitGuardian | **Gate** |
 |---|---|---|---|---|---|
-| Detection rules | 170 | 800+ | Partners | 482 | **281** |
+| Detection rules | 170 | 800+ | Partners | 482 | **146** |
 | Credential verification | No | Yes | Paid | Paid | **Yes** |
 | Auto-fix / extract to env | No | No | No | No | **Yes** |
 | Interactive remediation | No | No | No | No | **Yes** |
@@ -84,7 +84,7 @@ gate help              Show all commands
 
 ## Features
 
-- **281 detection rules** -- AWS, GCP, Azure, GitHub, Stripe, AI keys, databases, private keys, PII, and more
+- **146 detection rules** (78 built-in + 68 FORTRESS) -- AWS, GCP, Azure, GitHub, Stripe, OpenAI, Anthropic, databases, private keys, PII, and more
 - **Credential verification** -- checks if detected secrets are live and active
 - **Auto-fix across 9 languages** -- JS/TS, Python, Go, Ruby, Java, YAML, Terraform, Dockerfile, JSON
 - **Interactive remediation** -- single-keypress fix, vault, or ignore per finding
@@ -127,7 +127,7 @@ See **[GUIDE.md](GUIDE.md)** for the full technical reference.
 
 ## License
 
-MIT
+Apache 2.0 -- free to use, modify, and distribute, with patent protection. See [LICENSE](LICENSE) for details.
 
 ---
 

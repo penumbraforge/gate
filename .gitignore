@@ -47,3 +47,4 @@ secrets/
 cookies.txt
 internal/
 .aider*
+.claude/

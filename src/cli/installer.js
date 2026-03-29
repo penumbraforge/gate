@@ -41,11 +41,28 @@ function findGitRoot(cwd) {
  * @returns {string|null} Path to hooks directory or null
  */
 function getHooksDir(cwd) {
-  const gitRoot = findGitRoot(cwd);
+  const workDir = cwd || process.cwd();
+  const gitRoot = findGitRoot(workDir);
   if (!gitRoot) return null;
 
+  // Check for custom hooks path configured via git
+  try {
+    const customPath = execSync('git config core.hooksPath', {
+      encoding: 'utf8', cwd: workDir,
+    }).trim();
+    if (customPath) {
+      const resolved = path.isAbsolute(customPath) ? customPath : path.resolve(workDir, customPath);
+      if (!fs.existsSync(resolved)) {
+        fs.mkdirSync(resolved, { recursive: true });
+      }
+      return resolved;
+    }
+  } catch {
+    // No custom hooksPath configured
+  }
+
   // If .git is a file (worktree), we need to parse it
-  const dotGitPath = path.resolve(cwd || process.cwd(), '.git');
+  const dotGitPath = path.resolve(workDir, '.git');
   if (fs.existsSync(dotGitPath)) {
     const stat = fs.statSync(dotGitPath);
     if (stat.isDirectory()) {
@@ -91,7 +108,7 @@ if [ "$GATE_SKIP" = "1" ]; then
   exit 0
 fi
 
-export GATE_PRE_COMMIT=1
+export GATE_HOOK_TYPE=${hookType}
 
 # Find Node.js — checks explicit override, PATH, nvm, fnm, volta, common locations
 find_gate_node() {
@@ -115,7 +132,7 @@ fi
 # Find gate binary: local bin/gate.js > node_modules/.bin/gate > ~/.gate/bin/gate > PATH
 GATE_BIN=""
 HOOK_DIR="$(cd "$(dirname "$0")" && pwd)"
-REPO_DIR="$(cd "$HOOK_DIR/../.." && pwd)"
+REPO_DIR="$(git rev-parse --show-toplevel 2>/dev/null || cd "$HOOK_DIR/../.." && pwd)"
 
 if [ -f "$REPO_DIR/bin/gate.js" ]; then
   GATE_BIN="$GATE_NODE $REPO_DIR/bin/gate.js"
@@ -126,8 +143,10 @@ elif [ -f "$HOME/.gate/bin/gate" ]; then
 elif command -v gate >/dev/null 2>&1; then
   GATE_BIN="gate"
 else
-  echo "Gate not found. Run 'gate install' to set up the hook."
-  exit 0
+  echo "Gate not found. Commit blocked for safety." # gate-ignore
+  echo "Set GATE_ALLOW_MISSING=1 to bypass" # gate-ignore
+  if [ "$GATE_ALLOW_MISSING" = "1" ]; then exit 0; fi
+  exit 1
 fi
 
 # Run gate scan
@@ -311,7 +330,9 @@ function isInstalled(hookType, cwd) {
     if (!hooksDir) return false;
 
     const hookPath = path.join(hooksDir, hookType);
-    return fs.existsSync(hookPath);
+    if (!fs.existsSync(hookPath)) return false;
+    const content = fs.readFileSync(hookPath, 'utf8');
+    return content.includes(GATE_SECTION_START) || content.includes('gate scan');
   } catch {
     return false;
   }

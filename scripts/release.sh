@@ -90,9 +90,7 @@ npm run build
 # 5. Commit and tag
 info "Committing..."
 git add -A
-git commit --no-verify -m "v${NEW_VERSION}: release
-
-Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
+git commit --no-verify -m "v${NEW_VERSION}: release"
 
 info "Tagging v${NEW_VERSION}..."
 git tag -a "v${NEW_VERSION}" -m "Gate v${NEW_VERSION}"

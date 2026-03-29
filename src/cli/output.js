@@ -16,8 +16,8 @@ function redactSecret(match) {
 
 function shouldUseColor(setting) {
   if (process.env.NO_COLOR) return false;
-  if (setting === true) return true;
-  if (setting === false) return false;
+  if (setting === true || setting === 'true') return true;
+  if (setting === false || setting === 'false') return false;
   return process.stdout.isTTY || false;
 }
 

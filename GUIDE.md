@@ -25,7 +25,7 @@ gate/
 │       ├── remediation.js   # Fix guidance per secret type
 │       ├── updater.js       # Self-update checker
 │       └── vault.js         # Local AES-256-GCM encryption
-├── rules/                   # FORTRESS rule engine (281 detection rules)
+├── rules/                   # FORTRESS rule engine (68 detection rules)
 │   ├── rules.json           # Detection patterns (cryptographically signed)
 │   ├── rules.json.sig       # HMAC-SHA256 signature
 │   └── fortress.js          # Rule signing, verification, testing CLI
@@ -116,7 +116,7 @@ On subsequent runs, `gate` shows the status display.
 ### Detection Pipeline
 
 1. **File Input** — Reads file content line by line
-2. **Pattern Matching** — Tests each line against 78 built-in regex rules + 281 rules from `rules/rules.json`
+2. **Pattern Matching** — Tests each line against 78 built-in regex rules + 68 rules from `rules/rules.json`
 3. **Entropy Analysis** — Calculates Shannon entropy on suspicious tokens (threshold: 4.8 bits/char by default)
 4. **Ignore Filtering** — Checks `.gateignore` patterns, rule-scoped suppressions, and inline `gate-ignore` comments
 5. **False Positive Filtering** — Skips known safe patterns (test fixtures, example values, common variable names)

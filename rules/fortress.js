@@ -65,7 +65,9 @@ function verifySignature(rulesPath, sigPath) {
     .createHmac('sha256', getDerivedKey())
     .update(data)
     .digest('hex');
-  const valid = sig === expected;
+  const sigBuf = Buffer.from(sig);
+  const expectedBuf = Buffer.from(expected);
+  const valid = sigBuf.length === expectedBuf.length && crypto.timingSafeEqual(sigBuf, expectedBuf);
   console.log(`✓ Signature verification: ${valid ? 'PASSED ✓' : 'FAILED ✗'}`);
   return valid;
 }
@@ -85,9 +87,9 @@ function generateTestCases() {
   
   // AWS Tests (50+)
   tests.push(
-    { name: "AWS AKIA key", rule: "aws-secret-access-key", content: "AKIAIOSFODNN7EXAMPLE", should_match: true },
+    { name: "AWS AKIA key", rule: "aws-access-key-id-long-term", content: "AKIAIOSFODNN7EXAMPLE", should_match: true },
     { name: "AWS ASIA key", rule: "aws-access-key-id", content: "ASIAIOSFODNN7EXAMPLE", should_match: true },
-    { name: "AWS in env", rule: "aws-secret-access-key", content: "export AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE", should_match: true }
+    { name: "AWS in env", rule: "aws-access-key-id-long-term", content: "export AWS_ACCESS_KEY_ID=AKIAIOSFODNN7EXAMPLE", should_match: true }
   );
   
   // GCP Tests (30+)
@@ -116,7 +118,7 @@ function generateTestCases() {
   
   // Payment Tests (25+)
   tests.push(
-    { name: "Stripe live key", rule: "stripe-live-key", content: "sk_live_00000000000000000000000000", should_match: true },
+    { name: "Stripe live key", rule: "stripe-live-key", content: "sk_live_00000000000000000000000000000000000000", should_match: true },
     { name: "Stripe test key", rule: "stripe-live-key", content: "sk_test_00000000000000000000000000", should_match: false }
   );
   
@@ -275,8 +277,8 @@ module.exports = { getDerivedKey, signRules, verifySignature, loadRules, runTest
 // CLI — only runs when executed directly (not when required as a module)
 if (require.main === module) {
   const cmd = process.argv[2];
-  const rulesPath = '/Users/shadoe/.openclaw/workspace/gate-fortress/rules.json';
-  const sigPath = '/Users/shadoe/.openclaw/workspace/gate-fortress/rules.json.sig';
+  const rulesPath = process.argv[3] || path.join(__dirname, 'rules.json');
+  const sigPath = process.argv[4] || rulesPath + '.sig';
 
   switch (cmd) {
     case 'sign':

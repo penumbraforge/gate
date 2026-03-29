@@ -27,7 +27,6 @@ docs/**
 GUIDE.md
 README.md
 CONTRIBUTING.md
-CLAUDE.md
 
 # =============================================================================
 # .env.example — placeholder values, not real credentials
@@ -38,7 +37,6 @@ CLAUDE.md
 # Internal planning documents — contain example configs and mock data
 # =============================================================================
 internal/**
-docs/superpowers/**
 
 # =============================================================================
 # GitHub Action — example configs, action metadata, and token-handling code

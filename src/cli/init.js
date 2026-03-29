@@ -74,8 +74,9 @@ async function runInit(dir) {
   // 3. Install the pre-commit hook (best-effort — may already exist)
   let hookInstalled = false;
   try {
-    const result = install();
-    hookInstalled = result.success === true;
+    install('pre-commit', dir);
+    try { install('pre-push', dir); } catch {}
+    hookInstalled = true;
   } catch {
     hookInstalled = false;
   }

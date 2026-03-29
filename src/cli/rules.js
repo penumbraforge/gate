@@ -28,7 +28,7 @@ function verifyRuleSignature() {
   }
 }
 
-verifyRuleSignature();
+let _signatureVerified = false;
 
 const RULES = [
   // AWS
@@ -363,7 +363,7 @@ const RULES = [
   {
     id: 'twilio-api-key',
     name: 'Twilio API Key',
-    pattern: /SK[a-z0-9]{32}/i,
+    pattern: /\bSK[a-f0-9]{32}\b/,
     entropy: false,
     severity: 'critical',
     provider: 'Twilio',
@@ -554,7 +554,7 @@ const RULES = [
   {
     id: 'openai-api-key',
     name: 'OpenAI API Key',
-    pattern: /sk-(?:proj-)?[A-Za-z0-9]{48,}/,
+    pattern: /sk-(?:proj-)?(?!ant-|live_)[A-Za-z0-9]{48,}/,
     entropy: false,
     severity: 'critical',
     provider: 'OpenAI',
@@ -971,6 +971,10 @@ function getRulesBySeverity(severity) {
  * Get rules for pattern matching (exclude entropy-only rules)
  */
 function getPatternRules() {
+  if (!_signatureVerified) {
+    _signatureVerified = true;
+    verifyRuleSignature();
+  }
   return RULES.filter((r) => r.pattern !== null);
 }
 

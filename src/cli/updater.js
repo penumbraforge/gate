@@ -56,7 +56,7 @@ function getUpdateCommand(method) {
   switch (method) {
     case 'npm-global':
       return {
-        cmd: 'npm install -g @penumbra/gate@latest',
+        cmd: 'npm install -g @penumbraforge/gate@latest',
         desc: 'Update via npm',
       };
     case 'git-clone':
@@ -66,7 +66,7 @@ function getUpdateCommand(method) {
       };
     default:
       return {
-        cmd: `npm install -g @penumbra/gate@latest`,
+        cmd: `npm install -g @penumbraforge/gate@latest`,
         desc: 'Install latest version',
       };
   }
@@ -242,14 +242,14 @@ async function runUpdate(currentVersion) {
 
   if (method === 'npm-global') {
     console.log('Updating via npm...');
-    const npmUpdate = spawnSync('npm', ['install', '-g', '@penumbra/gate@latest'], {
+    const npmUpdate = spawnSync('npm', ['install', '-g', '@penumbraforge/gate@latest'], {
       stdio: 'inherit',
       shell: process.platform === 'win32',
     });
     if (npmUpdate.status !== 0) {
       console.log('');
       console.log('npm install failed. Try manually:');
-      console.log('  npm install -g @penumbra/gate@latest');
+      console.log('  npm install -g @penumbraforge/gate@latest');
       console.log('');
       console.log('Or install from source:');
       console.log(`  git clone https://github.com/${GITHUB_REPO}.git`);
@@ -266,7 +266,7 @@ async function runUpdate(currentVersion) {
   console.log('Could not determine install method. Update manually:');
   console.log('');
   console.log('  Option 1 — npm:');
-  console.log('    npm install -g @penumbra/gate@latest');
+  console.log('    npm install -g @penumbraforge/gate@latest');
   console.log('');
   console.log('  Option 2 — git:');
   console.log(`    git clone https://github.com/${GITHUB_REPO}.git`);

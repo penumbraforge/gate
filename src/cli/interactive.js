@@ -281,6 +281,12 @@ async function runInteractive(findings, options = {}) {
       if (result && result.fixed) {
         summary.fixed++;
         modifiedFiles.push(finding.file);
+        // Write to .env and ensure .gitignore coverage
+        if (result.envEntry) {
+          const envPath = path.join(repoDir, '.env');
+          fixer.updateEnvFile(envPath, result.envEntry.varName, result.envEntry.value);
+          fixer.ensureGitignore(repoDir);
+        }
         console.log(
           `  ${c(useColor, GREEN, '✓')} Fixed — secret extracted to .env` +
           (result.envEntry ? ` as ${result.envEntry.varName}` : '')
@@ -296,9 +302,19 @@ async function runInteractive(findings, options = {}) {
     } else if (action === 'v') {
       try {
         const encrypted = vault.encrypt(finding.match || '');
-        summary.vaulted++;
-        console.log(`  ${c(useColor, GREEN, '✓')} Encrypted with gate vault`);
-        console.log(`  ${c(useColor, DIM, encrypted.slice(0, 40) + '...')}`);
+        const content = fs.readFileSync(finding.file, 'utf8');
+        const vaultRef = `VAULT:${encrypted.slice(0, 20)}`;
+        const updated = content.split(finding.match).join(vaultRef);
+        if (updated !== content) {
+          fs.writeFileSync(finding.file, updated);
+          modifiedFiles.push(finding.file);
+          summary.vaulted++;
+          console.log(`  ${c(useColor, GREEN, '✓')} Secret replaced with vault reference`);
+        } else {
+          summary.vaulted++;
+          console.log(`  ${c(useColor, GREEN, '✓')} Encrypted (secret not found in source for inline replacement)`);
+          console.log(`  ${c(useColor, DIM, encrypted.slice(0, 40) + '...')}`);
+        }
       } catch (err) {
         console.log(`  ${c(useColor, YELLOW, '!')} Vault error: ${err.message}`);
       }

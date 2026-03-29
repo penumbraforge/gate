@@ -45,7 +45,7 @@ const DEFAULTS = {
 };
 
 // Keys that get deep-merged (display/behavior preferences)
-const DEEP_MERGE_KEYS = new Set(['output', 'hooks']);
+const DEEP_MERGE_KEYS = new Set(['output', 'severity']);
 
 function loadUserConfig(homeDir) {
   homeDir = homeDir || os.homedir();
@@ -151,7 +151,7 @@ function loadConfig(dir) {
     max_file_size: parseFileSize(userConfig.max_file_size),
     output: {
       format: userConfig.output?.format || DEFAULTS.output.format,
-      color: userConfig.output?.color ?? DEFAULTS.output.color,
+      color: parseBool(userConfig.output?.color, DEFAULTS.output.color),
       context_lines: parseNum(userConfig.output?.context_lines, DEFAULTS.output.context_lines),
     },
   };

@@ -85,6 +85,22 @@ function isInAnyCommit(filePath, cwd) {
  * @param {string} cwd
  * @returns {boolean}
  */
+/**
+ * Check if specific secret content appears in git history (pickaxe search).
+ * More accurate than file-level checks for determining if a secret was actually committed.
+ */
+function isContentInHistory(secretValue, filePath, cwd, remote = false) {
+  try {
+    const logArgs = remote
+      ? ['log', '--remotes', '-S', secretValue, '--oneline', '--', filePath]
+      : ['log', '--all', '-S', secretValue, '--oneline', '--', filePath];
+    const result = runGit(logArgs, cwd);
+    return result !== null && result.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 function isInRemote(filePath, cwd) {
   const result = runGit(['log', '--remotes', '--oneline', '--', filePath], cwd);
   return result !== null && result.length > 0;
@@ -117,7 +133,7 @@ function getRemoteExposureDate(filePath, cwd) {
  * @param {string} cwd      — working directory (defaults to process.cwd())
  * @returns {Promise<{level: string, confidence: string, details: string, exposureSince?: string}>}
  */
-async function assessExposure(filePath, cwd = process.cwd()) {
+async function assessExposure(filePath, cwd = process.cwd(), secretValue = null) {
   try {
     if (!isGitRepo(cwd)) {
       return {
@@ -127,9 +143,42 @@ async function assessExposure(filePath, cwd = process.cwd()) {
       };
     }
 
-    // Step 1: staged but never committed → LOCAL
+    // Content-level check: use git pickaxe (-S) when secret value is available
+    // This is more accurate than file-level checks for files with history
+    if (secretValue && secretValue.length >= 8) {
+      const inRemoteContent = isContentInHistory(secretValue, filePath, cwd, true);
+      if (inRemoteContent) {
+        const exposureSince = getRemoteExposureDate(filePath, cwd);
+        const result = {
+          level: 'PUSHED',
+          confidence: 'high',
+          details: 'Secret content found in remote-tracking history — treat as publicly exposed.',
+        };
+        if (exposureSince) {
+          result.exposureSince = exposureSince;
+          result.details += ` First pushed: ${exposureSince}.`;
+        }
+        return result;
+      }
+
+      const inAnyContent = isContentInHistory(secretValue, filePath, cwd, false);
+      if (inAnyContent) {
+        return {
+          level: 'COMMITTED',
+          confidence: 'high',
+          details: 'Secret content found in local commit history but not pushed to remote.',
+        };
+      }
+
+      return {
+        level: 'LOCAL',
+        confidence: 'high',
+        details: 'Secret content not found in any commit history.',
+      };
+    }
+
+    // Fallback: file-level checks when secret value not available
     if (isStagedOnly(filePath, cwd)) {
-      // Confirm it has no commit history either
       if (!isInAnyCommit(filePath, cwd)) {
         return {
           level: 'LOCAL',
@@ -139,7 +188,6 @@ async function assessExposure(filePath, cwd = process.cwd()) {
       }
     }
 
-    // Step 2: not in any commit at all → LOCAL (untracked/staged new file)
     if (!isInAnyCommit(filePath, cwd)) {
       return {
         level: 'LOCAL',
@@ -148,26 +196,24 @@ async function assessExposure(filePath, cwd = process.cwd()) {
       };
     }
 
-    // Step 3: in remote-tracking branches → PUSHED
     if (isInRemote(filePath, cwd)) {
       const exposureSince = getRemoteExposureDate(filePath, cwd);
       const result = {
         level: 'PUSHED',
-        confidence: 'high',
-        details: 'File exists in remote-tracking refs — treat as publicly exposed.',
+        confidence: 'medium',
+        details: 'File exists in remote history (file-level check — secret may not have been pushed).',
       };
       if (exposureSince) {
         result.exposureSince = exposureSince;
-        result.details += ` First pushed: ${exposureSince}.`;
+        result.details += ` File first pushed: ${exposureSince}.`;
       }
       return result;
     }
 
-    // Step 4: in commits but not remote → COMMITTED
     return {
       level: 'COMMITTED',
-      confidence: 'high',
-      details: 'File is committed locally but has not been pushed to any remote.',
+      confidence: 'medium',
+      details: 'File is committed locally (file-level check).',
     };
   } catch {
     return {

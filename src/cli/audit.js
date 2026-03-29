@@ -98,12 +98,17 @@ function recordScan(entry) {
     // Calculate hash of this entry (for chain integrity)
     const entryContent = JSON.stringify({
       timestamp: auditEntry.timestamp,
+      version: auditEntry.version,
       commitHash: auditEntry.commitHash,
       filesScanned: auditEntry.filesScanned,
       findings: auditEntry.findings,
       findingCount: auditEntry.findingCount,
       severityCounts: auditEntry.severityCounts,
       userDecision: auditEntry.userDecision,
+      verification: auditEntry.verification,
+      exposure: auditEntry.exposure,
+      action: auditEntry.action,
+      actionDetails: auditEntry.actionDetails,
       previousHash: auditEntry.previousHash,
     });
 
@@ -136,7 +141,15 @@ function readAuditLog() {
       .split('\n')
       .filter((line) => line.length > 0);
 
-    return lines.map((line) => JSON.parse(line));
+    const entries = [];
+    for (const line of lines) {
+      try {
+        entries.push(JSON.parse(line));
+      } catch {
+        // Skip malformed lines (truncated write, corruption)
+      }
+    }
+    return entries;
   } catch (error) {
     console.error('Failed to read audit log:', error.message);
     return [];
@@ -165,7 +178,23 @@ function verifyIntegrity() {
 
     for (let i = 0; i < entries.length; i++) {
       const entry = entries[i];
-      const entryContent = JSON.stringify({
+      // Try new hash format (all fields) first, fall back to legacy (7 fields) for old entries
+      const newContent = JSON.stringify({
+        timestamp: entry.timestamp,
+        version: entry.version,
+        commitHash: entry.commitHash,
+        filesScanned: entry.filesScanned,
+        findings: entry.findings,
+        findingCount: entry.findingCount,
+        severityCounts: entry.severityCounts,
+        userDecision: entry.userDecision,
+        verification: entry.verification,
+        exposure: entry.exposure,
+        action: entry.action,
+        actionDetails: entry.actionDetails,
+        previousHash: entry.previousHash,
+      });
+      const legacyContent = JSON.stringify({
         timestamp: entry.timestamp,
         commitHash: entry.commitHash,
         filesScanned: entry.filesScanned,
@@ -176,13 +205,14 @@ function verifyIntegrity() {
         previousHash: entry.previousHash,
       });
 
-      const expectedHash = calculateHash(entryContent);
+      const newHash = calculateHash(newContent);
+      const legacyHash = calculateHash(legacyContent);
 
-      if (entry.hash !== expectedHash) {
+      if (entry.hash !== newHash && entry.hash !== legacyHash) {
         errors.push({
           entryIndex: i,
           message: 'Hash mismatch',
-          expected: expectedHash,
+          expected: newHash,
           actual: entry.hash,
         });
       }
@@ -372,7 +402,7 @@ function getStatistics() {
     stats.severityTotals.low += counts.low || 0;
 
     const decision = entry.userDecision || 'none';
-    stats.decisionCounts[decision]++;
+    stats.decisionCounts[decision] = (stats.decisionCounts[decision] || 0) + 1;
   }
 
   if (stats.totalScans > 0) {

@@ -120,8 +120,8 @@ function shouldScanForEntropy(str) {
   // Skip template literals with interpolation (error messages, UI text, etc.)
   if (str.includes('${')) return false;
 
-  // Skip strings that look like file paths or CLI commands
-  if (str.includes('/') && (str.match(/\//g) || []).length >= 2) return false;
+  // Skip strings that look like file paths or URLs (but not base64 with slashes)
+  if (/^\/|:\/\//.test(str) && (str.match(/\//g) || []).length >= 2) return false;
 
   // Skip strings with lots of spaces (comments, prose, etc.)
   const spaceRatio = (str.match(/ /g) || []).length / str.length;
@@ -133,6 +133,32 @@ function shouldScanForEntropy(str) {
 
   return true;
 }
+
+// Cached compiled regexes for performance (avoids re-creating per line)
+let _cachedBuiltinRegexes = null;
+const _cachedCustomRegexes = new Map();
+
+function getCachedBuiltinRegexes() {
+  if (!_cachedBuiltinRegexes) {
+    const rules = getPatternRules();
+    _cachedBuiltinRegexes = rules
+      .filter(r => r.pattern)
+      .map(rule => ({
+        rule,
+        regex: new RegExp(rule.pattern.source, 'g'),
+      }));
+  }
+  return _cachedBuiltinRegexes;
+}
+
+function getCachedCustomRegex(rule) {
+  if (!_cachedCustomRegexes.has(rule.id)) {
+    _cachedCustomRegexes.set(rule.id, new RegExp(rule.pattern, 'g'));
+  }
+  return _cachedCustomRegexes.get(rule.id);
+}
+
+const SEVERITY_ORDER = { critical: 4, high: 3, medium: 2, low: 1 };
 
 /**
  * Scan a string for pattern matches
@@ -150,17 +176,14 @@ function scanForPatterns(content, lineNum, options = {}) {
     return findings;
   }
 
-  const rules = getPatternRules();
   const entropyRule = getEntropyRule();
   const entropyThreshold = options.entropyThreshold || 3.8;
   const customRules = options.customRules || [];
 
-  // Pattern matching — built-in rules
-  for (const rule of rules) {
-    if (!rule.pattern) continue; // Skip entropy-only rules
-
+  // Pattern matching — built-in rules (cached regexes)
+  for (const { rule, regex } of getCachedBuiltinRegexes()) {
+    regex.lastIndex = 0;
     let match;
-    const regex = new RegExp(rule.pattern.source, 'g');
 
     while ((match = regex.exec(content)) !== null) {
       findings.push({
@@ -176,12 +199,13 @@ function scanForPatterns(content, lineNum, options = {}) {
     }
   }
 
-  // Pattern matching — custom rules from .gaterc
+  // Pattern matching — custom rules from .gaterc (cached regexes)
   for (const rule of customRules) {
     if (!rule.pattern) continue;
 
+    const regex = getCachedCustomRegex(rule);
+    regex.lastIndex = 0;
     let match;
-    const regex = new RegExp(rule.pattern, 'g');
 
     while ((match = regex.exec(content)) !== null) {
       findings.push({
@@ -197,13 +221,12 @@ function scanForPatterns(content, lineNum, options = {}) {
     }
   }
 
-  // Entropy-based detection (look for random-looking strings)
-  // Simple approach: look for quoted strings and check their entropy
-  const stringPattern = /['"`]([^'"`\n]{20,})['"`]/g;
+  // Entropy-based detection — use backreference for matching quotes
+  const stringPattern = /(['"`])([^'"`\n]{20,})\1/g;
   let match;
 
   while ((match = stringPattern.exec(content)) !== null) {
-    const str = match[1];
+    const str = match[2];
 
     if (shouldScanForEntropy(str)) {
       const entropy = calculateEntropy(str);
@@ -403,6 +426,17 @@ function scanFile(filePath, options = {}) {
       const lineFindings = scanForPatterns(lines[i], i + 1, scanOptions);
       results.findings.push(...lineFindings);
     }
+    // Deduplicate findings — keep highest severity per (lineNumber, matchStart, matchLength)
+    const dedupMap = new Map();
+    for (const finding of results.findings) {
+      const key = `${finding.lineNumber}:${finding.matchStart}:${finding.matchLength}`;
+      const existing = dedupMap.get(key);
+      if (!existing || (SEVERITY_ORDER[finding.severity] || 0) > (SEVERITY_ORDER[existing.severity] || 0)) {
+        dedupMap.set(key, finding);
+      }
+    }
+    results.findings = Array.from(dedupMap.values());
+
   } catch (error) {
     if (error.code === 'EACCES') {
       results.error = `Cannot read ${filePath}: Permission denied`;
