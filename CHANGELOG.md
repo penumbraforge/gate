@@ -11,7 +11,7 @@ Complete rewrite from SaaS to pure CLI. Gate is now free, forever.
 
 ### Added
 - Zero-config CLI secret scanner — works out of the box with `npx @penumbraforge/gate`
-- 281 detection rules (FORTRESS engine) covering AWS, GCP, Azure, GitHub, Stripe, Slack, and 50+ more providers
+- 146 detection rules (78 built-in + 68 FORTRESS) covering AWS, GCP, Azure, GitHub, Stripe, OpenAI, Anthropic, and 50+ more providers
 - Auto-fix engine across 9 languages (JS/TS, Python, Go, Ruby, Java, YAML, Terraform, JSON, Dockerfile)
 - Credential verification for 23 providers — confirms if detected secrets are live
 - Interactive remediation TUI with exposure-aware actions and pagination
