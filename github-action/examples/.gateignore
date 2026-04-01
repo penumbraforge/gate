@@ -1,0 +1,12 @@
+# Gate ignore patterns for CI/CD
+# See GUIDE.md for full reference
+
+# Ignore test fixtures
+test/fixtures/**
+
+# Ignore documentation examples
+docs/examples/**
+
+# Rule-scoped suppression
+[rule:aws-secret-key] docs/**/*.md
+[rule:high-entropy-string] src/crypto/constants.js

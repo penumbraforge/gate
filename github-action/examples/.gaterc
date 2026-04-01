@@ -1,0 +1,18 @@
+# Gate configuration for CI/CD
+# See GUIDE.md for full reference
+
+# Entropy threshold for high-entropy string detection
+entropy_threshold: 4.8
+
+# Verify rule signatures on load
+verify: true
+
+# Override severity levels for specific rules
+severity:
+  high-entropy-string: low
+
+# Output settings
+output:
+  format: text
+  color: auto
+  context_lines: 2

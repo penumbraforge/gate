@@ -5,159 +5,43 @@ All notable changes to the Gate GitHub Action are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.0.0] - 2024-01-15
+## [2.0.0] — 2026-03-22
+
+### Changed
+- Complete rewrite to wrap the Gate v2 CLI (`@penumbraforge/gate`)
+- Gate is now free and open source (Apache 2.0) — no license checks
+- Configuration via `.gaterc` (YAML/JSON) and `.gateignore` instead of `.gate.json`
+- Action inputs simplified: `mode`, `verify`, `format`, `fail-on`, `failure-mode`, `slack-webhook`, `github-token`
 
 ### Added
+- `verify` input — run credential verification for supported providers
+- `format` input — `text`, `json`, or `sarif` output
+- `fail-on` input — minimum severity threshold (`critical`, `high`, `medium`, `low`)
+- SARIF upload to GitHub Code Scanning when `format: sarif`
+- Scan errors treated as incomplete security result (configurable via `failure-mode`)
 
-#### Core Features
-- ✅ **Enforce & Report Modes** - Control whether findings block CI or just notify
-- ✅ **PR Comments** - Automatically comment on PRs with findings
-- ✅ **Slack Integration** - Send notifications to Slack on violations
-- ✅ **License Verification** - Verify Gate license with graceful degradation
-- ✅ **Allowlist Support** - Mark specific findings as false positives
-- ✅ **Audit Logging** - Searchable audit trail in GitHub Actions logs
-- ✅ **Bypass Detection** - Detect and block security bypass attempts
-- ✅ **Repository Configuration** - Custom behavior via `.gate.json`
-- ✅ **Multiple Failure Modes** - Block (fail CI) or warn (alert only)
+### Removed
+- License verification (Gate is completely free)
+- `.gate.json` and `.gate-allowlist.json` configuration (replaced by `.gaterc` and `.gateignore`)
+- `rules-version` input (rules ship with the CLI)
+- Bypass detection features
+- All SaaS and monetization dependencies
 
-#### Scanning
-- Automatic file detection for PR changes
-- Full commit scanning for push events
-- Smart filtering of allowlisted findings
-- Bypass detection and logging
+## [1.0.0] — 2024-01-15
 
-#### GitHub Integration
-- PR comment posting with severity indicators
-- Request changes on critical findings
-- Delete old Gate comments (show latest only)
-- GitHub Actions audit log integration
-- Support for custom GitHub tokens
-
-#### Slack Integration
-- Rich message formatting with action buttons
-- Severity-based notification colors
-- Bypass attempt alerts
-- Direct link to GitHub Actions run
-
-#### Configuration
-- `.gate.json` for repository-level settings
-- `.gate-allowlist.json` for false positive management
-- Support for glob patterns in allowlist
-- Rules version pinning
-- Security team override capabilities
-
-#### Error Handling
-- Fail-open strategy for availability (graceful degradation)
-- Fail-closed strategy for critical issues (security)
-- Clear error messages in logs
-- Retry logic for transient failures
-- Network timeout handling
-
-#### Testing
-- Comprehensive Jest test suite
-- Unit tests for all major functions
-- Integration tests for end-to-end workflows
-- Mocked GitHub API and external services
-- Test coverage tracking
-
-#### Documentation
-- Complete README with quick start
-- Configuration guide with examples
-- Troubleshooting guide for common issues
-- Security best practices documentation
-- Development guide for contributors
-- Multiple example workflows
-- Example configuration files
-
-### Features
-
-#### Inputs
-- `mode`: enforce/report
-- `slack-webhook`: Optional Slack integration
-- `failure-mode`: block/warn
-- `rules-version`: Pin to specific version
-- `github-token`: GitHub API token
-
-#### Outputs
-- `findings-count`: Number of findings
-- `blocked`: Whether CI was blocked
-- `scan-report`: JSON scan report
-
-#### Environment Variables
-- `GATE_DEBUG`: Enable debug logging
-- `GATE_TIMEOUT`: Configure scan timeout
-- `GATE_RULES_DIR`: Custom rules directory
-- `GATE_LOG_FORMAT`: Log output format
-
-### Example Workflows
-- Enforce mode (strict blocking)
-- Report mode (soft enforcement)
-- Scheduled scans (daily audits)
-- Matrix testing (multiple OS/Node versions)
-
-### Example Configurations
-- `.gate.json` - Full repository configuration
-- `.gate-allowlist.json` - Allowlist patterns
-
-## Future Roadmap
-
-### Planned Features (v1.1.0)
-- [ ] Custom rule support
-- [ ] Database backend for audit logs
-- [ ] Web dashboard for audit logs
-- [ ] Advanced finding analytics
-
-### Planned Features (v2.0.0)
-- [ ] Automated remediation suggestions
-- [ ] Team management UI
-- [ ] Enhanced cost tracking
-- [ ] GraphQL API integration
-
-### Proposed Community Features
-- [ ] BitBucket Server support
-- [ ] GitLab support
-- [ ] Azure DevOps support
-- [ ] Jira integration
-- [ ] PagerDuty integration
+### Added
+- Initial release
+- Enforce and report modes
+- PR comments with findings
+- Slack integration
+- Configurable failure modes (block/warn)
 
 ## Support
 
-### Getting Help
-- 📚 [Gate Documentation](https://gate.penumbraforge.com/docs)
-- 🐛 [Report Issues](https://github.com/penumbra/gate/issues)
-- 💬 [Community Slack](https://github.com/penumbra/gate/discussions)
-- 📧 Enterprise: support@penumbraforge.com
-
-### Version Support
-- **v1.x**: Actively maintained (current)
-- **v0.x**: Legacy, limited support
-
-### Deprecation Policy
-- 6 months notice before breaking changes
-- Automatic migration guides provided
-- Community input on major changes
-
-## Contributing
-
-See [DEVELOPMENT.md](DEVELOPMENT.md) for contribution guidelines.
+- GitHub Issues: https://github.com/penumbraforge/gate/issues
+- Community: https://github.com/penumbraforge/gate/discussions
+- Email: support@penumbraforge.com
 
 ## License
 
-MIT License - See [LICENSE](LICENSE) file
-
----
-
-## Version History
-
-### v1.0.0 (Current)
-Initial production release with all core features.
-
-**Status**: ✅ Production Ready  
-**Stability**: Stable  
-**Support**: Active  
-
----
-
-**Last Updated**: 2024-01-15  
-**Maintainer**: Penumbra Security Team  
-**License**: MIT
+Apache 2.0 — See [LICENSE](LICENSE) file

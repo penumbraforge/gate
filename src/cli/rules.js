@@ -1,6 +1,6 @@
 /**
  * Secret detection rules for Gate scanner
- * 50+ patterns covering common cloud providers, APIs, and private keys
+ * 80+ patterns covering common cloud providers, APIs, and private keys
  */
 
 const fs = require('fs');

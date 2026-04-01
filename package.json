@@ -1,6 +1,6 @@
 {
   "name": "@penumbraforge/gate",
-  "version": "2.0.0-beta.1",
+  "version": "2.0.1",
   "description": "Gate: Zero-config secret scanner with auto-fix. Finds secrets, fixes them, for free.",
   "main": "src/cli/scanner.js",
   "bin": {

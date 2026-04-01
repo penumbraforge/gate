@@ -14,7 +14,7 @@ gate/
 ├── src/
 │   └── cli/                 # Scanner modules (pure JS, no build needed)
 │       ├── scanner.js       # Core scanning engine
-│       ├── rules.js         # 78 built-in rules + rules.json loader
+│       ├── rules.js         # 80 built-in rules + rules.json loader
 │       ├── config.js        # .gaterc configuration loader
 │       ├── ignore.js        # .gateignore pattern matching
 │       ├── output.js        # Terminal formatting (color, CI, SARIF)
@@ -78,20 +78,20 @@ That's it. No PostgreSQL, no Redis, no other services.
 ### npm (recommended)
 
 ```bash
-npm install -g @penumbra/gate
+npm install -g @penumbraforge/gate
 ```
 
 ### npx (no install)
 
 ```bash
 cd your-project
-npx @penumbra/gate
+npx @penumbraforge/gate
 ```
 
 ### From source
 
 ```bash
-git clone https://github.com/penumbra/gate.git
+git clone https://github.com/penumbraforge/gate.git
 cd gate
 npm install
 npm link    # makes `gate` available globally
@@ -116,7 +116,7 @@ On subsequent runs, `gate` shows the status display.
 ### Detection Pipeline
 
 1. **File Input** — Reads file content line by line
-2. **Pattern Matching** — Tests each line against 78 built-in regex rules + 68 rules from `rules/rules.json`
+2. **Pattern Matching** — Tests each line against 80 built-in regex rules + 68 rules from `rules/rules.json`
 3. **Entropy Analysis** — Calculates Shannon entropy on suspicious tokens (threshold: 4.8 bits/char by default)
 4. **Ignore Filtering** — Checks `.gateignore` patterns, rule-scoped suppressions, and inline `gate-ignore` comments
 5. **False Positive Filtering** — Skips known safe patterns (test fixtures, example values, common variable names)
@@ -387,7 +387,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: penumbra/gate@v1
+      - uses: penumbraforge/gate@v2
         with:
           mode: enforce           # or 'report'
           failure-mode: block     # or 'warn'
@@ -399,10 +399,12 @@ jobs:
 | Input | Default | Description |
 |-------|---------|-------------|
 | `mode` | `report` | `enforce` blocks on findings, `report` just logs |
-| `failure-mode` | `block` | `block` fails CI, `warn` passes but alerts |
+| `verify` | `false` | Run credential verification for supported providers |
+| `format` | `text` | Output format: `text`, `json`, `sarif` |
+| `fail-on` | `high` | Minimum severity to fail: `critical`, `high`, `medium`, `low` |
+| `failure-mode` | derived | `block` fails CI, `warn` passes but alerts (derived from `mode` if omitted) |
 | `slack-webhook` | --- | Slack webhook URL for notifications |
-| `rules-version` | latest | Pin to specific rules version |
-| `github-token` | `${{ github.token }}` | For PR comments |
+| `github-token` | `${{ github.token }}` | For PR comments and SARIF upload |
 
 ### Action Outputs
 
@@ -476,7 +478,7 @@ npx jest --no-coverage         # skip coverage thresholds
 |------|---------|
 | `bin/gate.js` | CLI entry point — parses commands, dispatches to handlers |
 | `src/cli/scanner.js` | Core scanning engine — pattern matching + entropy analysis |
-| `src/cli/rules.js` | 78 built-in rules + rules.json loader with signature verification |
+| `src/cli/rules.js` | 80 built-in rules + rules.json loader with signature verification |
 | `src/cli/config.js` | .gaterc loader — YAML/JSON config with stack detection |
 | `src/cli/ignore.js` | .gateignore loader — glob patterns, rule-scoped suppression, inline ignore |
 | `src/cli/output.js` | Terminal output — color, CI annotation, SARIF builder |

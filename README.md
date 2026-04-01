@@ -20,10 +20,10 @@ gate fix            # Auto-fix all findings
 $ npx @penumbraforge/gate
 
   ┌─────────────────────────────────────────┐
-  │  Gate v2.0.0 — secret scanner + fixer   │
+  │  Gate v2.0.1 — secret scanner + fixer   │
   │                                         │
   │  ✓ Pre-commit hook installed            │
-  │  ✓ 146 detection rules loaded           │
+  │  ✓ 148 detection rules loaded           │
   │  ✓ Zero config needed                   │
   │                                         │
   │  Scanning your repo now...              │
@@ -38,7 +38,7 @@ That's it. Every commit is now protected.
 
 | Capability | Gitleaks | TruffleHog | GitHub | GitGuardian | **Gate** |
 |---|---|---|---|---|---|
-| Detection rules | 170 | 800+ | Partners | 482 | **146** |
+| Detection rules | 170 | 800+ | Partners | 482 | **148** |
 | Credential verification | No | Yes | Paid | Paid | **Yes** |
 | Auto-fix / extract to env | No | No | No | No | **Yes** |
 | Interactive remediation | No | No | No | No | **Yes** |
@@ -86,7 +86,7 @@ gate help              Show all commands
 
 ## Features
 
-- **146 detection rules** (78 built-in + 68 FORTRESS) -- AWS, GCP, Azure, GitHub, Stripe, OpenAI, Anthropic, databases, private keys, PII, and more
+- **148 detection rules** (80 built-in + 68 FORTRESS) -- AWS, GCP, Azure, GitHub, Stripe, OpenAI, Anthropic, databases, private keys, PII, and more
 - **Credential verification** -- checks if detected secrets are live and active
 - **Auto-fix across 9 languages** -- JS/TS, Python, Go, Ruby, Java, YAML, Terraform, Dockerfile, JSON
 - **Interactive remediation** -- single-keypress fix, vault, or ignore per finding

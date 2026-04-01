@@ -4,7 +4,7 @@
 
 ### Action Not Running
 
-**Symptom:** Gate workflow doesn't trigger on PR or push  
+**Symptom:** Gate workflow doesn't trigger on PR or push
 **Causes:**
 - Workflow file not on main branch
 - Workflow disabled in repository settings
@@ -18,14 +18,14 @@ git commit -m "Add Gate workflow"
 git push origin main
 
 # Check workflow is enabled
-# Settings → Actions → General → Allow all actions
+# Settings > Actions > General > Allow all actions
 ```
 
 ---
 
 ### Gate Command Not Found
 
-**Symptom:** 
+**Symptom:**
 ```
 Error: command not found: gate
 ```
@@ -43,16 +43,16 @@ Error: command not found: gate
 
 ```yaml
 steps:
-  - uses: actions/checkout@v3
-  - run: npm install -g @penumbra/gate
-  - uses: penumbra/gate@v1
+  - uses: actions/checkout@v4
+  - run: npm install -g @penumbraforge/gate
+  - uses: penumbraforge/gate@v2
 ```
 
 ---
 
 ### Slack Webhook Not Working
 
-**Symptom:** 
+**Symptom:**
 - Notifications not appearing in Slack
 - No error in logs
 
@@ -68,34 +68,11 @@ curl -X POST 'https://hooks.slack.com/services/YOUR/WEBHOOK/URL' \
   -d '{"text":"Test from Gate"}'
 
 # Verify secret is set
-# Settings → Secrets and variables → Actions → SLACK_WEBHOOK
+# Settings > Secrets and variables > Actions > SLACK_WEBHOOK
 
 # Check channel permissions
 # Verify @slackbot can post in target channel
 ```
-
----
-
-### License Verification Failed
-
-**Symptom:**
-```
-⚠️ License verification failed
-```
-
-**Causes:**
-- License endpoint unreachable
-- Invalid license
-- Network timeout
-
-**Solutions:**
-```json
-{
-  "skip_license_check": true
-}
-```
-
-Action continues anyway; this is just a warning.
 
 ---
 
@@ -105,24 +82,21 @@ Action continues anyway; this is just a warning.
 
 **Solutions:**
 
-1. **Add to allowlist:**
+1. **Add to `.gateignore`:**
 
-```json
-[
-  {
-    "file": "docs/example.md",
-    "rule": "aws-secret-key",
-    "comment": "Documentation example"
-  }
-]
+```gitignore
+# Ignore documentation examples
+docs/example.md
+
+# Rule-scoped suppression
+[rule:aws-secret-key] docs/**
 ```
 
-2. **Suppress rule globally:**
+2. **Suppress rule via `.gaterc`:**
 
-```json
-{
-  "excluded_rules": ["false-positive-rule"]
-}
+```yaml
+severity:
+  high-entropy-string: low
 ```
 
 3. **Review findings:**
@@ -143,12 +117,11 @@ with:
 
 **Solutions:**
 
-1. **Only notify on critical findings:**
+1. **Only fail on critical findings:**
 
-```json
-{
-  "notify_on_severity": ["CRITICAL", "HIGH"]
-}
+```yaml
+with:
+  fail-on: critical
 ```
 
 2. **Disable Slack temporarily:**
@@ -172,7 +145,7 @@ on:
 
 ### PR Comment Not Posting
 
-**Symptom:** 
+**Symptom:**
 - No Gate comment on PR
 - Error about permissions
 
@@ -208,7 +181,7 @@ gh api rate_limit
 
 ### Action Hangs / Timeout
 
-**Symptom:** 
+**Symptom:**
 ```
 Action timed out after 6 hours
 ```
@@ -220,26 +193,16 @@ Action timed out after 6 hours
 
 **Solutions:**
 
-1. **Increase timeout:**
+1. **Optimize scanning with `.gateignore`:**
 
-```yaml
-env:
-  GATE_TIMEOUT: "3600"  # 60 minutes
+```gitignore
+node_modules/**
+.git/**
+dist/**
+vendor/**
 ```
 
-2. **Optimize scanning:**
-
-```json
-{
-  "exclude_patterns": [
-    "node_modules/**",
-    ".git/**",
-    "dist/**"
-  ]
-}
-```
-
-3. **Run on larger runner:**
+2. **Run on larger runner:**
 
 ```yaml
 runs-on: ubuntu-latest-xl
@@ -252,27 +215,18 @@ runs-on: ubuntu-latest-xl
 **Symptom:** Same commit produces different findings in different runs
 
 **Causes:**
-- Rules version not pinned
-- Network issues with license check
+- Rules version changed between runs
 - Temporary state corruption
 
 **Solutions:**
 
-1. **Pin rules version:**
+1. **Pin action version:**
 
 ```yaml
-with:
-  rules-version: "v1.2.3"
+uses: penumbraforge/gate@v2
 ```
 
-2. **Force consistent environment:**
-
-```yaml
-env:
-  GATE_DEBUG: "true"
-```
-
-3. **Check commit hash:**
+2. **Check commit hash:**
 
 Verify you're scanning the same code:
 
@@ -284,64 +238,30 @@ git log -1 --format=%H
 
 ### Configuration File Not Loaded
 
-**Symptom:** 
-- `.gate.json` changes ignored
-- Allowlist not working
+**Symptom:**
+- `.gaterc` changes ignored
+- `.gateignore` not working
 
 **Causes:**
 - File not committed
-- Wrong location (not in root)
-- JSON syntax error
+- Wrong location (not in project root)
+- YAML/JSON syntax error
 - File name typo
 
 **Solutions:**
 
 ```bash
 # Verify file exists
-git ls-files | grep '.gate'
+git ls-files | grep '.gaterc\|.gateignore'
 
-# Validate JSON
-cat .gate.json | jq .
+# Validate YAML
+cat .gaterc
 
 # Ensure in root directory
-ls -la .gate.json
+ls -la .gaterc .gateignore
 
 # Check committed
 git status
-```
-
----
-
-### Bypass Detection Not Working
-
-**Symptom:** 
-- Bypass not detected
-- Security team wants stricter enforcement
-
-**Solutions:**
-
-1. **Enable bypass checking:**
-
-```json
-{
-  "check_bypasses": true,
-  "bypass_required_for": ["CRITICAL", "HIGH"]
-}
-```
-
-2. **Require team approval:**
-
-```json
-{
-  "security_team": ["@security-leads"],
-  "require_approval_count": 2
-}
-```
-
-3. **Audit all bypasses:**
-
-```bash
-gh run logs [run-id] | grep bypass
 ```
 
 ---
@@ -386,62 +306,25 @@ npm test -- --testNamePattern="PR Comments"
 **Causes:**
 - Large repository
 - Many rules to check
-- Network latency
 
 **Solutions:**
 
-```json
-{
-  "exclude_patterns": [
-    "node_modules/**",
-    ".git/**",
-    "vendor/**",
-    "dist/**"
-  ],
-  "max_file_size": 1000000
-}
+Add exclusions to `.gateignore`:
+```gitignore
+node_modules/**
+.git/**
+vendor/**
+dist/**
 ```
 
-Or split workflow:
+Or split workflow to scan only changed paths:
 
 ```yaml
-# Scan only changed files in PR
 on:
   pull_request:
     paths:
       - 'src/**'
       - 'config/**'
-```
-
----
-
-### High CPU Usage
-
-**Problem:** Gate using 100% CPU
-
-**Solutions:**
-
-1. **Use more resources:**
-
-```yaml
-runs-on: ubuntu-latest-xl
-```
-
-2. **Limit parallel rules:**
-
-```json
-{
-  "max_parallel_rules": 4
-}
-```
-
-3. **Sample large files:**
-
-```json
-{
-  "sample_large_files": true,
-  "max_file_size": 5000000
-}
 ```
 
 ---
@@ -452,25 +335,13 @@ runs-on: ubuntu-latest-xl
 
 ```yaml
 env:
-  GATE_DEBUG: "true"
+  DEBUG: "1"
 ```
-
-This logs:
-- File scanning details
-- Rule matches
-- Configuration parsing
-- API calls
 
 ### View Full Logs
 
 ```bash
 gh run view [run-id] --log
-```
-
-### Extract Audit Log
-
-```bash
-gh run logs [run-id] | grep "Gate Audit Log"
 ```
 
 ### Check GitHub Actions Status
@@ -486,11 +357,10 @@ gh run view [run-id]
 
 ### Before Reporting
 
-1. ✅ Check troubleshooting guide (this file)
-2. ✅ Enable debug logging
-3. ✅ Verify configuration syntax
-4. ✅ Check GitHub Actions logs
-5. ✅ Review audit logs
+1. Check troubleshooting guide (this file)
+2. Enable debug logging
+3. Verify configuration syntax
+4. Check GitHub Actions logs
 
 ### Report Issue
 
@@ -503,70 +373,28 @@ Include:
 
 ### Support Channels
 
-- 🐛 GitHub Issues: https://github.com/penumbra/gate/issues
-- 📚 Documentation: https://gate.penumbraforge.com/docs
-- 💬 Community: https://github.com/penumbra/gate/discussions
-- 📧 Enterprise: support@penumbraforge.com
-
----
-
-## Advanced Debugging
-
-### Mock Testing
-
-```bash
-# Test locally without Gate
-npm test
-```
-
-### Dry Run
-
-```yaml
-# Don't fail, just report
-with:
-  mode: report
-  failure-mode: warn
-```
-
-### Isolated Testing
-
-Create test branch without action:
-
-```bash
-git checkout -b test/gate-debug
-git push origin test/gate-debug
-# Manually verify behavior
-```
-
-### API Testing
-
-```bash
-# Test GitHub API access
-gh api user
-gh api repos/owner/repo
-
-# Test Slack webhook
-curl -X POST [webhook-url] -d '{"text":"test"}'
-```
+- GitHub Issues: https://github.com/penumbraforge/gate/issues
+- Documentation: https://github.com/penumbraforge/gate/blob/main/GUIDE.md
+- Community: https://github.com/penumbraforge/gate/discussions
+- Email: support@penumbraforge.com
 
 ---
 
 ## Common Mistakes
 
-❌ **Don't:**
+Don't:
 - Hardcode secrets in workflow
 - Commit sensitive data to test findings
 - Use `always()` to override failures
 - Ignore warnings
-- Skip license verification (without good reason)
 
-✅ **Do:**
+Do:
 - Use GitHub secrets: `${{ secrets.NAME }}`
 - Use test fixtures for scanning
 - Review and address findings
 - Monitor audit logs
 - Enable notifications
-- Document exceptions
+- Document exceptions in `.gateignore`
 
 ---
 
@@ -581,6 +409,6 @@ curl -X POST [webhook-url] -d '{"text":"test"}'
 ---
 
 If your issue isn't listed, please:
-1. Check logs with `GATE_DEBUG=true`
+1. Check logs with `DEBUG=1`
 2. Report with full context
 3. Include reproduction steps

@@ -22,12 +22,12 @@ Gate does NOT:
 
 The action avoids logging sensitive data:
 
-✅ **Safe:**
+Safe:
 - Findings metadata (filename, rule name, severity)
 - Counts of issues
 - Audit trail
 
-❌ **Avoided:**
+Avoided:
 - Actual secret content
 - File paths containing secrets
 - User tokens or passwords
@@ -72,22 +72,6 @@ permissions:
 slack-webhook: ${{ secrets.SLACK_WEBHOOK }}
 ```
 
-### License Verification
-
-**What's transmitted:**
-- Repository owner and name
-- GitHub token (for verification only)
-
-**Protocol:**
-- HTTPS only
-- 5-second timeout
-- No data stored
-
-**Graceful fallback:**
-- If endpoint down: action continues
-- If license invalid: warning, action continues
-- Safe for disconnected/air-gapped environments
-
 ## Token Management
 
 ### GitHub Token
@@ -126,15 +110,17 @@ slack-webhook: ${{ secrets.SLACK_WEBHOOK }}
 
 ## Configuration Security
 
-### `.gate.json`
+### `.gaterc`
 
 Can be public (no secrets):
-```json
-{
-  "enforce_mode": true,
-  "block_on_findings": true,
-  "rules_version": "v1.2.3"
-}
+```yaml
+entropy_threshold: 4.8
+verify: true
+hooks:
+  - pre-commit
+  - pre-push
+severity:
+  high-entropy-string: low
 ```
 
 Never include:
@@ -143,20 +129,18 @@ Never include:
 - Passwords
 - Webhook URLs
 
-### `.gate-allowlist.json`
+### `.gateignore`
 
 Safe to be public:
-```json
-[
-  {
-    "file": "docs/example.md",
-    "rule": "aws-secret-key",
-    "comment": "Documentation"
-  }
-]
+```gitignore
+# Ignore test fixtures
+test/fixtures/**
+
+# Rule-scoped suppression
+[rule:aws-secret-key] docs/example.md
 ```
 
-Document why patterns are allowlisted.
+Document why patterns are ignored.
 
 ## Audit & Compliance
 
@@ -177,11 +161,9 @@ gh run logs [run-id] | grep "Gate Audit Log"
 
 ### Compliance Features
 
-✅ **Available:**
+Available:
 - Audit trail in GitHub Actions logs
-- Bypass detection and logging
 - Decision logging (block/pass)
-- Security team override tracking
 - Reproducible scans (pinned rules)
 
 ### GDPR Compliance
@@ -198,10 +180,10 @@ The action:
 
 ```yaml
 # Pin to specific version (safer)
-uses: penumbra/gate@v1
+uses: penumbraforge/gate@v2
 
 # Or latest (automatic updates, slightly riskier)
-uses: penumbra/gate@main
+uses: penumbraforge/gate@main
 ```
 
 ### Self-Hosted Runners
@@ -223,14 +205,8 @@ runs-on: [self-hosted, secure-runner]
 For disconnected networks:
 
 1. Gate can run offline (no external calls required)
-2. Cache npm packages: `actions/setup-node@v3` with caching
-3. Configure license verification skip:
-
-```json
-{
-  "skip_license_check": true
-}
-```
+2. Cache npm packages: `actions/setup-node@v4` with caching
+3. Gate runs 100% locally with no external dependencies beyond js-yaml
 
 ## Threat Model
 
@@ -249,31 +225,29 @@ For disconnected networks:
 | Token leakage | GitHub revokes; timeout limits damage |
 | Webhook compromise | Rotate webhook URL; monitor Slack |
 | Supply chain (npm) | Use specific version in package.json |
-| Configuration tampering | Require code review for `.gate.json` |
+| Configuration tampering | Require code review for `.gaterc` |
 
 ## Best Practices
 
-### ✅ Do
+### Do
 
 - **Use GitHub secrets** for all credentials
-- **Pin versions** - especially rules
-- **Review findings** - don't auto-allowlist
-- **Document exceptions** - why is this allowlisted?
-- **Monitor logs** - watch for unexpected patterns
-- **Rotate credentials** - annually minimum
-- **Use HTTPS** - for all webhooks
-- **Enable audit logging** - `audit_log.enabled: true`
+- **Pin versions** of the action
+- **Review findings** before suppressing
+- **Document exceptions** in `.gateignore` with comments
+- **Monitor logs** for unexpected patterns
+- **Rotate credentials** annually minimum
+- **Use HTTPS** for all webhooks
+- **Enable audit logging** in your `.gaterc`
 
-### ❌ Don't
+### Don't
 
 - **Hardcode secrets** in workflows or configs
 - **Commit tokens** to repository
 - **Share webhook URLs** in PRs
 - **Use default GitHub token** outside current repo
-- **Skip license checks** without good reason
-- **Allow-list sensitive rules** without review
-- **Ignore bypass attempts** - investigate them
-- **Use draft mode** on production branches
+- **Suppress rules** without review
+- **Ignore findings** without investigation
 - **Log sensitive data** (even for debugging)
 
 ## Response to Compromise
@@ -294,8 +268,8 @@ For disconnected networks:
 
 ### If Configuration Tampered
 
-1. Review: Check `.gate.json` and `.gate-allowlist.json` diff
-2. Verify: Ensure rules version is correct
+1. Review: Check `.gaterc` and `.gateignore` diff
+2. Verify: Ensure rules are correct
 3. Audit: Check who made changes
 4. Revert: Force push correct configuration
 5. Investigate: Why was it changed?
@@ -320,6 +294,6 @@ If you find a security vulnerability:
 ## Support
 
 Security questions? Contact:
-- 🔐 security@penumbraforge.com
-- 🐛 GitHub Issues (non-sensitive): https://github.com/penumbra/gate/issues
-- 💬 Community: https://github.com/penumbra/gate/discussions
+- security@penumbraforge.com
+- GitHub Issues (non-sensitive): https://github.com/penumbraforge/gate/issues
+- Community: https://github.com/penumbraforge/gate/discussions

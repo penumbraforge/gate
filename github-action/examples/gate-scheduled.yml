@@ -9,31 +9,31 @@ jobs:
   gate-audit:
     runs-on: ubuntu-latest
     name: Daily Security Audit
-    
+
     permissions:
       contents: read
       issues: write
-    
+
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      
-      - uses: penumbra/gate@v1
+
+      - uses: penumbraforge/gate@v2
         id: gate
         with:
           mode: report
           failure-mode: warn
           slack-webhook: ${{ secrets.SLACK_WEBHOOK }}
-      
+
       - name: Create Issue on Findings
         if: steps.gate.outputs.findings-count > 0
-        uses: actions/github-script@v6
+        uses: actions/github-script@v7
         with:
           script: |
             github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              title: `⚠️ Security findings from Gate daily audit`,
+              title: `Security findings from Gate daily audit`,
               body: `Daily Gate security scan found ${{ steps.gate.outputs.findings-count }} issues.\n\nReview run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`
             })

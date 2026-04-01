@@ -5,13 +5,27 @@ All notable changes to Gate will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.1] — 2026-03-31
+
+### Changed
+- Updated built-in rule count from 78 to 80 (148 total with FORTRESS)
+- Hardened scan, fix, and GitHub Action workflows
+- Cleaned all legacy SaaS and monetization artifacts from documentation
+- Fixed package name references across all documentation (`@penumbraforge/gate`)
+- Fixed GitHub Action examples to use `penumbraforge/gate@v2`
+- Rewrote GitHub Action SECURITY.md, TROUBLESHOOTING.md, and CHANGELOG.md for v2
+- Removed stale v1 delivery documents and legacy config file examples
+- Updated release script for pure CLI workflow (removed Cloudflare Worker references)
+- Removed stale `v2-clean` branch from CI triggers
+- Updated version from beta to stable release
+
 ## [2.0.0] — 2026-03-22
 
 Complete rewrite from SaaS to pure CLI. Gate is now free, forever.
 
 ### Added
 - Zero-config CLI secret scanner — works out of the box with `npx @penumbraforge/gate`
-- 146 detection rules (78 built-in + 68 FORTRESS) covering AWS, GCP, Azure, GitHub, Stripe, OpenAI, Anthropic, and 50+ more providers
+- 148 detection rules (80 built-in + 68 FORTRESS) covering AWS, GCP, Azure, GitHub, Stripe, OpenAI, Anthropic, and 50+ more providers
 - Auto-fix engine across 9 languages (JS/TS, Python, Go, Ruby, Java, YAML, Terraform, JSON, Dockerfile)
 - Credential verification for 23 providers — confirms if detected secrets are live
 - Interactive remediation TUI with exposure-aware actions and pagination

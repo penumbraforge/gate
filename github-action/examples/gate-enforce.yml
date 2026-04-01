@@ -13,27 +13,29 @@ jobs:
   gate-scan:
     runs-on: ubuntu-latest
     name: Security Scan with Gate
-    
+
     permissions:
       contents: read
       pull-requests: write
       checks: write
-    
+
     steps:
       - name: Checkout Code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Full history for accurate file detection
-      
+
       - name: Run Gate Security Scanner
-        uses: penumbra/gate@v1
+        uses: penumbraforge/gate@v2
+        id: gate
         with:
           mode: enforce
           failure-mode: block
+          fail-on: high
+          verify: true
           slack-webhook: ${{ secrets.SLACK_WEBHOOK }}
-          rules-version: "v1.2.3"
           github-token: ${{ github.token }}
-      
+
       - name: Report Results
         if: always()
         run: |
