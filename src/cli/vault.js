@@ -6,21 +6,19 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const os = require('os');
+const { getGatePath, ensureGateHome } = require('./paths');
 
-const GATE_DIR = path.join(os.homedir(), '.gate');
-const KEY_PATH = path.join(GATE_DIR, 'vault.key');
 const ALGORITHM = 'aes-256-gcm';
+
+function getKeyPath() {
+  return getGatePath('vault.key');
+}
 
 /**
  * Ensure ~/.gate directory exists
  */
 function ensureGateDir() {
-  if (!fs.existsSync(GATE_DIR)) {
-    fs.mkdirSync(GATE_DIR, { recursive: true, mode: 0o700 });
-  } else {
-    try { fs.chmodSync(GATE_DIR, 0o700); } catch {}
-  }
+  ensureGateHome();
 }
 
 /**
@@ -30,14 +28,15 @@ function ensureGateDir() {
  */
 function keygen(force = false) {
   ensureGateDir();
+  const keyPath = getKeyPath();
 
-  if (fs.existsSync(KEY_PATH) && !force) {
-    return { created: false, path: KEY_PATH };
+  if (fs.existsSync(keyPath) && !force) {
+    return { created: false, path: keyPath };
   }
 
   const key = crypto.randomBytes(32).toString('hex');
-  fs.writeFileSync(KEY_PATH, key, { mode: 0o600 });
-  return { created: true, path: KEY_PATH };
+  fs.writeFileSync(keyPath, key, { mode: 0o600 });
+  return { created: true, path: keyPath };
 }
 
 /**
@@ -45,11 +44,12 @@ function keygen(force = false) {
  * @returns {Buffer} 32-byte key
  */
 function loadKey() {
-  if (!fs.existsSync(KEY_PATH)) {
+  const keyPath = getKeyPath();
+  if (!fs.existsSync(keyPath)) {
     keygen();
   }
 
-  const hex = fs.readFileSync(KEY_PATH, 'utf8').trim();
+  const hex = fs.readFileSync(keyPath, 'utf8').trim();
   if (hex.length !== 64) {
     throw new Error(`Invalid vault key (expected 64 hex chars, got ${hex.length}). Regenerate with: gate vault keygen --force`);
   }

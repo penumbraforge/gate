@@ -16,8 +16,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 const { execFileSync } = require('child_process');
+const { getGatePath } = require('./paths');
 
 // ─── Provider rotation knowledge ─────────────────────────────────────────────
 
@@ -398,7 +398,7 @@ function nextIncidentId(incidentsDir) {
  * @returns {object} the incident record
  */
 function createIncidentRecord(finding, exposureWindow = {}, options = {}) {
-  const incidentsDir = options.incidentsDir || path.join(os.homedir(), '.gate', 'incidents');
+  const incidentsDir = options.incidentsDir || getGatePath('incidents');
   fs.mkdirSync(incidentsDir, { recursive: true, mode: 0o700 });
 
   const id = nextIncidentId(incidentsDir);
@@ -446,7 +446,7 @@ function createIncidentRecord(finding, exposureWindow = {}, options = {}) {
  * @returns {string} Markdown report
  */
 function generateIncidentReport(incidentId, options = {}) {
-  const incidentsDir = options.incidentsDir || path.join(os.homedir(), '.gate', 'incidents');
+  const incidentsDir = options.incidentsDir || getGatePath('incidents');
   const filePath = path.join(incidentsDir, `${incidentId}.json`);
 
   if (!fs.existsSync(filePath)) {

@@ -320,6 +320,22 @@ describe('generateJSONReport', () => {
     expect(report.findings).toHaveLength(0);
     expect(report.summary.totalFindings).toBe(0);
   });
+
+  test('JSON report preserves verification status from enriched findings', () => {
+    const scanResults = makeScanResults();
+    const enrichedFindings = scanResults.filesScanned.flatMap((fileResult) =>
+      fileResult.findings.map((finding) => ({
+        ...finding,
+        file: fileResult.file,
+      }))
+    );
+
+    enrichedFindings[0].verification = { status: 'inactive', details: {} };
+    const report = generateJSONReport(scanResults, { findings: enrichedFindings });
+
+    expect(report.findings[0].verification).toBe('inactive');
+    expect(report.summary.verified.inactive).toBe(2);
+  });
 });
 
 describe('generateIncidentReport', () => {

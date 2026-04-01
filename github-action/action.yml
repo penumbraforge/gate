@@ -19,6 +19,9 @@ inputs:
     description: 'Minimum severity to fail: critical, high, medium, low'
     required: false
     default: 'high'
+  failure-mode:
+    description: 'How to treat findings or scan errors: block or warn'
+    required: false
   slack-webhook:
     description: 'Slack webhook URL for notifications'
     required: false

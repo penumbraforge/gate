@@ -8,8 +8,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 const crypto = require('crypto');
+const { getGatePath } = require('./paths');
 
 // ─── Known rule ID → env var name mappings ──────────────────────────────────
 
@@ -396,11 +396,12 @@ function ensureGitignore(repoDir) {
     const lines = content.split('\n');
     // Check for an exact .env line (not .env.local, etc.)
     if (lines.some(l => l.trim() === '.env')) {
-      return; // Already there
+      return false;
     }
   }
   content += (content && !content.endsWith('\n') ? '\n' : '') + '.env\n';
   fs.writeFileSync(gitignorePath, content);
+  return true;
 }
 
 /**
@@ -411,14 +412,38 @@ function ensureGitignore(repoDir) {
 function createEnvExample(repoDir, envEntries) {
   const examplePath = path.join(repoDir, '.env.example');
   let content = '# Copy to .env and fill in real values\n\n';
+  let changed = false;
+  const existingVars = new Set();
+
+  if (fs.existsSync(examplePath)) {
+    content = fs.readFileSync(examplePath, 'utf8');
+    for (const line of content.split('\n')) {
+      const match = line.match(/^([A-Z0-9_]+)=/);
+      if (match) existingVars.add(match[1]);
+    }
+  } else {
+    changed = true;
+  }
+
+  if (content.length > 0 && !content.endsWith('\n')) {
+    content += '\n';
+    changed = true;
+  }
+
   const seen = new Set();
   for (const entry of envEntries) {
     const name = entry.varName.replace(/_NEW$/, '');
     if (seen.has(name)) continue;
     seen.add(name);
-    content += `${name}=\n`;
+    if (!existingVars.has(name)) {
+      content += `${name}=\n`;
+      changed = true;
+    }
   }
-  fs.writeFileSync(examplePath, content);
+  if (changed) {
+    fs.writeFileSync(examplePath, content);
+  }
+  return { path: examplePath, changed };
 }
 
 // ─── Snapshot management ────────────────────────────────────────────────────
@@ -432,7 +457,28 @@ const MAX_SNAPSHOTS = 10;
  */
 function getSnapshotDir(repoDir) {
   const hash = crypto.createHash('sha256').update(path.resolve(repoDir)).digest('hex').slice(0, 16);
-  return path.join(os.homedir(), '.gate', 'snapshots', hash);
+  return getGatePath('snapshots', hash);
+}
+
+function calculateFileHash(filePath) {
+  if (!fs.existsSync(filePath)) return null;
+  return crypto.createHash('sha256').update(fs.readFileSync(filePath)).digest('hex');
+}
+
+function loadSnapshotManifest(snapshotPath) {
+  return JSON.parse(fs.readFileSync(path.join(snapshotPath, 'manifest.json'), 'utf8'));
+}
+
+function saveSnapshotManifest(snapshotPath, manifest) {
+  fs.writeFileSync(
+    path.join(snapshotPath, 'manifest.json'),
+    JSON.stringify(manifest, null, 2),
+    { mode: 0o600 }
+  );
+}
+
+function encodeSnapshotSafeName(relPath) {
+  return Buffer.from(relPath, 'utf8').toString('base64url');
 }
 
 /**
@@ -452,8 +498,7 @@ function createSnapshot(repoDir, filesToBackup) {
 
   for (const relPath of filesToBackup) {
     const fullPath = path.join(repoDir, relPath);
-    // Encode the relative path into a safe filename (replace / with __)
-    const safeFileName = relPath.replace(/[/\\]/g, '__');
+    const safeFileName = encodeSnapshotSafeName(relPath);
     if (fs.existsSync(fullPath)) {
       fs.copyFileSync(fullPath, path.join(snapshotPath, 'files', safeFileName));
       manifest.files.push({ path: relPath, safeName: safeFileName, action: 'modified' });
@@ -465,6 +510,15 @@ function createSnapshot(repoDir, filesToBackup) {
   fs.writeFileSync(path.join(snapshotPath, 'manifest.json'), JSON.stringify(manifest, null, 2), { mode: 0o600 });
   pruneSnapshots(snapshotDir);
   return snapshotPath;
+}
+
+function finalizeSnapshot(snapshotPath, repoDir) {
+  const manifest = loadSnapshotManifest(snapshotPath);
+  for (const fileEntry of manifest.files) {
+    const fullPath = path.join(repoDir, fileEntry.path);
+    fileEntry.postHash = calculateFileHash(fullPath);
+  }
+  saveSnapshotManifest(snapshotPath, manifest);
 }
 
 /**
@@ -598,7 +652,7 @@ function fixAll(scanResults, options = {}) {
   filesToBackup.add('.env.example');
 
   // Create snapshot
-  createSnapshot(repoDir, Array.from(filesToBackup));
+  const snapshotPath = createSnapshot(repoDir, Array.from(filesToBackup));
 
   const summary = {
     fixed: 0,
@@ -608,7 +662,9 @@ function fixAll(scanResults, options = {}) {
     warnings: [],
     envEntries: [],
     verified: false,
+    modifiedFiles: [],
   };
+  const modifiedFiles = new Set();
 
   // Group findings by file and process bottom-up to avoid line number shifts
   for (const fileResult of scanResults.filesScanned) {
@@ -626,6 +682,9 @@ function fixAll(scanResults, options = {}) {
         if (result.envEntry) summary.envEntries.push(result.envEntry);
         if (result.note) summary.notes.push(result.note);
         if (result.warning) summary.warnings.push(result.warning);
+        if (result.change && result.change.file) {
+          modifiedFiles.add(result.change.file);
+        }
         // If an import was added at the top, adjust remaining (unprocessed) findings' line numbers
         if (result.importAdded) {
           for (let k = j + 1; k < sortedFindings.length; k++) {
@@ -648,14 +707,22 @@ function fixAll(scanResults, options = {}) {
     }
     // Update the entry's varName if it was renamed due to conflict
     entry.varName = envResult.varName;
+    if (envResult.action !== 'existing') {
+      modifiedFiles.add(envPath);
+    }
   }
 
   // Ensure .gitignore contains .env
-  ensureGitignore(repoDir);
+  if (ensureGitignore(repoDir)) {
+    modifiedFiles.add(path.join(repoDir, '.gitignore'));
+  }
 
   // Create .env.example
   if (summary.envEntries.length > 0) {
-    createEnvExample(repoDir, summary.envEntries);
+    const envExampleResult = createEnvExample(repoDir, summary.envEntries);
+    if (envExampleResult.changed) {
+      modifiedFiles.add(envExampleResult.path);
+    }
   }
 
   // Verification: check that secrets are no longer in modified files
@@ -675,6 +742,9 @@ function fixAll(scanResults, options = {}) {
       }
     }
   }
+
+  summary.modifiedFiles = Array.from(modifiedFiles);
+  finalizeSnapshot(snapshotPath, repoDir);
 
   return summary;
 }
@@ -748,10 +818,19 @@ function undo(repoDir) {
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   let restored = 0;
   let deleted = 0;
+  const conflicts = [];
 
   for (const fileEntry of manifest.files) {
     const fullPath = path.join(repoDir, fileEntry.path);
+    const currentExists = fs.existsSync(fullPath);
+    const currentHash = currentExists ? calculateFileHash(fullPath) : null;
+    const hasPostHash = typeof fileEntry.postHash === 'string' && fileEntry.postHash.length > 0;
+
     if (fileEntry.action === 'modified') {
+      if (hasPostHash && currentHash !== fileEntry.postHash) {
+        conflicts.push(`Skipped ${fileEntry.path}: file changed since fix`);
+        continue;
+      }
       // Restore from backup
       const backupPath = path.join(latestSnapshot, 'files', fileEntry.safeName);
       if (fs.existsSync(backupPath)) {
@@ -760,7 +839,14 @@ function undo(repoDir) {
       }
     } else if (fileEntry.action === 'created') {
       // File was created by gate — delete it
-      if (fs.existsSync(fullPath)) {
+      if (!currentExists) {
+        continue;
+      }
+      if (hasPostHash && currentHash !== fileEntry.postHash) {
+        conflicts.push(`Skipped ${fileEntry.path}: file changed since fix`);
+        continue;
+      }
+      if (currentExists) {
         fs.unlinkSync(fullPath);
         deleted++;
       }
@@ -770,7 +856,13 @@ function undo(repoDir) {
   // Remove the used snapshot
   fs.rmSync(latestSnapshot, { recursive: true, force: true });
 
-  return { restored, deleted, error: null };
+  return {
+    restored,
+    deleted,
+    skipped: conflicts.length,
+    conflicts,
+    error: null,
+  };
 }
 
 // ─── Exports ────────────────────────────────────────────────────────────────

@@ -9,7 +9,7 @@ Gate catches secrets before they're committed, verifies if they're live, and aut
 ## Quick Start
 
 ```bash
-npx gate            # Install pre-commit hook (one command, done)
+npx @penumbraforge/gate   # Install pre-commit hook (one command, done)
 gate scan --all     # Scan your entire repo
 gate fix            # Auto-fix all findings
 ```
@@ -69,10 +69,12 @@ gate scan [path]       Scan files or directories for secrets
 gate scan --all        Scan the entire repository
 gate scan --staged     Scan only staged files (pre-commit)
 gate scan --history    Scan full git history for leaked secrets
-gate fix               Auto-fix all findings (extract to .env, update references)
+gate fix               Auto-fix findings across tracked files
+gate fix --staged      Auto-fix staged findings only
 gate fix --interactive Single-keypress remediation per finding
 gate verify            Check if detected secrets are live
 gate incident          Guided 5-step incident response workflow
+gate incident report   Generate a saved incident report by ID
 gate report            Generate compliance report (OWASP, NIST, CIS, SOC2)
 gate install           Install pre-commit hook
 gate audit             View local audit log
@@ -97,7 +99,7 @@ gate help              Show all commands
 ## Installation
 
 ```bash
-npx gate                        # Zero-install (runs via npx)
+npx @penumbraforge/gate         # Zero-install (runs via npx)
 npm install -g @penumbraforge/gate   # Global install
 brew install gate               # Homebrew (coming soon)
 ```

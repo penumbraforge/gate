@@ -63,9 +63,11 @@ Usage:
   gate                     Show status (or install hook on first run)
   gate scan [files]        Scan for secrets (default: staged files)
   gate scan --all          Scan all tracked files
+  gate verify [files]      Scan and verify detected credentials
+  gate incident [files]    Run incident response for pushed secrets
   gate init                Set up Gate for this project
   gate status              Show Gate health check
-  gate fix                 Auto-remediate findings
+  gate fix [files]         Auto-remediate findings (default: all tracked files)
   gate vault <cmd>         Encrypt/decrypt secrets locally
   gate audit [options]     View or query audit log
   gate install             Install pre-commit hook
@@ -89,6 +91,9 @@ Scan Options:
   --entropy-threshold  Set entropy threshold (default: 4.8)
 
 Fix Options:
+  --all                Fix findings across all tracked files (default)
+  --staged             Fix findings in staged files only
+  --interactive        Guided remediation walkthrough
   --dry-run            Preview what fix would do without changing files
   --undo               Revert the most recent fix
 
@@ -97,12 +102,14 @@ Report Options:
   --format <fmt>       Report format: markdown (default), html, json
 
 Examples:
-  npx gate                 Install hook and start protecting
+  npx @penumbraforge/gate  Install hook and start protecting
   gate scan                Scan staged files before commit
   gate scan --all          Full repository scan
   gate scan --verify       Scan and check if credentials are live
   gate scan --history 50   Scan last 50 commits for secrets
   gate fix                 Auto-fix all findings (extract to .env)
+  gate verify --all        Full scan with credential verification
+  gate incident --all      Guide incident response for pushed secrets
   gate fix --dry-run       Preview fixes without changing files
   gate fix --undo          Revert the last fix
   gate report              Generate Markdown compliance report
@@ -142,19 +149,52 @@ Examples:
 Gate fix — auto-remediate detected secrets
 
 Usage:
-  gate fix                 Fix all findings (extract to .env)
+  gate fix                 Fix all findings in tracked files
+  gate fix [files...]      Fix findings in specific files or directories
+  gate fix --staged        Fix findings in staged files only
+  gate fix --interactive   Guided remediation walkthrough
   gate fix --dry-run       Preview changes without modifying files
   gate fix --undo          Revert the most recent fix
 
 Options:
+  --all                    Scan all tracked files before fixing (default)
+  --staged                 Scan staged files before fixing
+  --interactive            Guided remediation walkthrough
   --dry-run                Show what would change
   --undo                   Restore files from before the last fix
   --entropy-threshold <N>  Entropy threshold for scanning
 
 Examples:
   gate fix                 Auto-fix all findings
+  gate fix src config      Fix explicit files/directories
+  gate fix --staged        Fix only staged findings
   gate fix --dry-run       Preview fixes first
   gate fix --undo          Revert the last fix
+`,
+  verify: `
+Gate verify — scan and verify detected credentials
+
+Usage:
+  gate verify [files...]   Scan specific files and verify findings
+  gate verify --staged     Scan staged files and verify findings (default)
+  gate verify --all        Scan all tracked files and verify findings
+
+Examples:
+  gate verify
+  gate verify --all
+`,
+  incident: `
+Gate incident — respond to pushed secret exposure
+
+Usage:
+  gate incident [files...]     Scan targets and guide incident response
+  gate incident --staged       Evaluate staged files (default)
+  gate incident --all          Evaluate all tracked files
+  gate incident report <id>    Generate a saved incident report
+
+Examples:
+  gate incident --all
+  gate incident report inc_20260331_abcdef
 `,
   report: `
 Gate report — generate compliance reports
@@ -279,6 +319,17 @@ function parseArgs() {
     return parsed;
   }
 
+  if (args[0] === '--version' || args[0] === '-v') {
+    parsed.command = 'version';
+    parsed.options.version = true;
+    return parsed;
+  }
+
+  if (args[0] === '--help' || args[0] === '-h') {
+    parsed.options.help = true;
+    return parsed;
+  }
+
   parsed.command = args[0];
 
   for (let i = 1; i < args.length; i++) {
@@ -314,6 +365,78 @@ function parseArgs() {
   parsed.options.help = args.includes('--help') || args.includes('-h');
 
   return parsed;
+}
+
+function isGitRepository() {
+  try {
+    execSync('git rev-parse --is-inside-work-tree', { stdio: 'ignore' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function exitForMissingGit(directHint) {
+  console.error(directHint || "gate: Git not found or not in a git repository. Install git or use 'gate scan <file>' for direct file scanning.");
+  process.exit(1);
+}
+
+function flattenFindings(results) {
+  const allFindings = [];
+  for (const file of results.filesScanned) {
+    for (const finding of file.findings) {
+      allFindings.push({
+        ...finding,
+        file: finding.file || file.file,
+      });
+    }
+  }
+  return allFindings;
+}
+
+function printScanErrors(results) {
+  if (!results.errorCount) return;
+  console.log('');
+  console.log('Scan errors:');
+  for (const scanError of results.errors) {
+    console.log(`  ${scanError.file}: ${scanError.error}`);
+  }
+}
+
+function getFixTargets(files, options) {
+  const explicitTargets = [];
+  if (options.file) {
+    explicitTargets.push(options.file);
+  }
+  if (files.length > 0) {
+    explicitTargets.push(...files);
+  }
+  return explicitTargets;
+}
+
+function getFixScanResults(files, options, scanOptions) {
+  const explicitTargets = getFixTargets(files, options);
+  if (explicitTargets.length > 0) {
+    const results = scanFiles(explicitTargets, scanOptions);
+    return { results, targets: explicitTargets, scope: 'explicit' };
+  }
+
+  if (options.staged) {
+    const stagedFiles = getStagedFiles();
+    const results = scanFiles(stagedFiles, scanOptions);
+    return { results, targets: stagedFiles, scope: 'staged' };
+  }
+
+  if (!isGitRepository()) {
+    exitForMissingGit("gate: Git not found or not in a git repository. Use 'gate fix <file>' to remediate direct file targets.");
+  }
+
+  const results = scanAll(scanOptions);
+  return {
+    results,
+    targets: results.filesScanned.map((fileResult) => fileResult.file),
+    scope: 'all',
+  };
 }
 
 /**
@@ -418,14 +541,9 @@ async function handleScan(files, options) {
   const spinner = useSpinner ? createSpinner() : null;
 
   // Check git availability when we need it (not when specific files are passed)
-  if (files.length === 0) {
-    try {
-      execSync('git rev-parse --is-inside-work-tree', { stdio: 'ignore' });
-    } catch {
+  if (files.length === 0 && !isGitRepository()) {
       if (spinner) spinner.fail('Git not found or not in a git repository.');
-      console.error("gate: Git not found or not in a git repository. Install git or use 'gate scan <file>' for direct file scanning.");
-      process.exit(1);
-    }
+      exitForMissingGit();
   }
 
   if (spinner) spinner.start('Discovering files...');
@@ -501,15 +619,7 @@ async function handleScan(files, options) {
   }
 
   // Collect all findings with file reference
-  const allFindings = [];
-  for (const file of results.filesScanned) {
-    for (const finding of file.findings) {
-      allFindings.push({
-        ...finding,
-        file: file.file,
-      });
-    }
-  }
+  const allFindings = flattenFindings(results);
 
   // Attach remediation one-liner to each finding
   for (const finding of allFindings) {
@@ -530,14 +640,14 @@ async function handleScan(files, options) {
 
   // SARIF output mode — use reporter module
   if (outputFormat === 'sarif') {
-    console.log(JSON.stringify(generateSARIF(results), null, 2));
-    process.exit(results.totalFindings > 0 ? 1 : 0);
+    console.log(JSON.stringify(generateSARIF(results, { findings: allFindings }), null, 2));
+    process.exit(results.totalFindings > 0 || results.errorCount > 0 ? 1 : 0);
   }
 
   // JSON output mode — use reporter module
   if (outputFormat === 'json') {
-    console.log(JSON.stringify(generateJSONReport(results), null, 2));
-    process.exit(results.totalFindings > 0 ? 1 : 0);
+    console.log(JSON.stringify(generateJSONReport(results, { findings: allFindings }), null, 2));
+    process.exit(results.totalFindings > 0 || results.errorCount > 0 ? 1 : 0);
   }
 
   // CI mode — emit annotations
@@ -549,12 +659,12 @@ async function handleScan(files, options) {
 
   // Load rule count for scan header
   const { RULES } = require('../src/cli/rules');
-  const scanExtra = { fileCount: filesToScan.length, elapsed: scanElapsed };
+  const scanExtra = { fileCount: results.filesScanned.length, elapsed: scanElapsed };
 
   // Text output
   if (results.totalFindings > 0) {
     // Scan header
-    console.log(formatScanHeader(VERSION, RULES.length, filesToScan.length, useColor));
+    console.log(formatScanHeader(VERSION, RULES.length, results.filesScanned.length, useColor));
 
     // Header
     console.log(formatHeader(results.totalFindings, useColor));
@@ -580,6 +690,7 @@ async function handleScan(files, options) {
     // Summary
     const counts = { ...results.severityCounts, total: results.totalFindings };
     console.log(formatSummary(counts, useColor, scanExtra));
+    printScanErrors(results);
 
     // Record to audit log
     const commitHash = getCurrentCommitHash();
@@ -588,7 +699,8 @@ async function handleScan(files, options) {
       filesScanned: results.filesScanned.map(f => f.file),
       findings: allFindings,
       severityCounts: results.severityCounts,
-      userDecision: 'reported',
+      userDecision: results.errorCount > 0 ? 'error' : 'reported',
+      actionDetails: results.errorCount > 0 ? `${results.errorCount} scan error(s)` : null,
     });
 
     // If --interactive flag, jump straight to interactive mode
@@ -654,10 +766,10 @@ async function handleScan(files, options) {
       }
     }
 
-    process.exit(1);
+    process.exit(results.errorCount > 0 || results.totalFindings > 0 ? 1 : 0);
   } else {
     // No findings — clean
-    console.log(formatScanHeader(VERSION, RULES.length, filesToScan.length, useColor));
+    console.log(formatScanHeader(VERSION, RULES.length, results.filesScanned.length, useColor));
 
     const commitHash = getCurrentCommitHash();
     recordScan({
@@ -665,12 +777,166 @@ async function handleScan(files, options) {
       filesScanned: results.filesScanned.map(f => f.file),
       findings: [],
       severityCounts: results.severityCounts,
-      userDecision: 'approved',
+      userDecision: results.errorCount > 0 ? 'error' : 'approved',
+      actionDetails: results.errorCount > 0 ? `${results.errorCount} scan error(s)` : null,
     });
 
     const counts = { critical: 0, high: 0, medium: 0, low: 0, total: 0 };
     console.log(formatSummary(counts, useColor, scanExtra));
+    printScanErrors(results);
+    if (results.errorCount > 0) {
+      console.log('\nScan incomplete: some files could not be inspected.\n');
+      process.exit(1);
+    }
     process.exit(0);
+  }
+}
+
+async function handleVerify(files, options) {
+  await handleScan(files, { ...options, verify: true, 'no-verify': false });
+}
+
+async function handleIncident(files, options) {
+  if (files[0] === 'report') {
+    const incidentId = files[1];
+    if (!incidentId) {
+      console.error('Usage: gate incident report <incident-id>');
+      process.exit(1);
+    }
+    const report = genIncReport(incidentId);
+    const outPath = `gate-incident-${incidentId}.md`;
+    fs.writeFileSync(outPath, report);
+    console.log(`  Incident report saved to ${outPath}`);
+    return;
+  }
+
+  const scanOptions = {
+    entropyThreshold: parseFloat(options['entropy-threshold']) || undefined,
+  };
+
+  let results;
+  if (files.length > 0) {
+    results = scanFiles(files, scanOptions);
+  } else if (options.all) {
+    if (!isGitRepository()) {
+      exitForMissingGit("gate: Git not found or not in a git repository. Use 'gate incident <file>' to inspect direct file targets.");
+    }
+    results = scanAll(scanOptions);
+  } else {
+    if (!isGitRepository()) {
+      exitForMissingGit("gate: Git not found or not in a git repository. Use 'gate incident <file>' to inspect direct file targets.");
+    }
+    const stagedFiles = getStagedFiles();
+    if (stagedFiles.length === 0) {
+      console.log('No staged files to inspect for incident response.');
+      process.exit(0);
+    }
+    results = scanFiles(stagedFiles, scanOptions);
+  }
+
+  if (results.errorCount > 0) {
+    printScanErrors(results);
+    process.exit(1);
+  }
+
+  const allFindings = flattenFindings(results);
+  if (allFindings.length === 0) {
+    console.log('No findings to evaluate for incident response.');
+    process.exit(0);
+  }
+
+  for (const finding of allFindings) {
+    finding.exposure = await assessExposure(finding.file, process.cwd());
+  }
+
+  const pushedFindings = allFindings.filter(
+    (finding) => finding.exposure && finding.exposure.level === 'PUSHED'
+  );
+
+  if (pushedFindings.length === 0) {
+    console.log('No pushed findings require incident response.');
+    process.exit(0);
+  }
+
+  for (const finding of pushedFindings) {
+    await startIncidentResponse(finding, { repoDir: process.cwd() });
+  }
+}
+
+async function handleFix(files, options) {
+  const scanOptions = { entropyThreshold: parseFloat(options['entropy-threshold']) || undefined };
+  const { results: fixScanResults, targets } = getFixScanResults(files, options, scanOptions);
+
+  if (fixScanResults.errorCount > 0) {
+    printScanErrors(fixScanResults);
+    process.exit(1);
+  }
+
+  if (fixScanResults.totalFindings === 0) {
+    console.log('  No findings to fix.');
+    process.exit(0);
+  }
+
+  if (options.interactive) {
+    const interactiveFindings = flattenFindings(fixScanResults);
+    for (const finding of interactiveFindings) {
+      const rem = getRemediation(finding.ruleId);
+      finding.remediation = rem.guide;
+      finding.exposure = await assessExposure(finding.file, process.cwd());
+    }
+
+    const interactiveResult = await runInteractive(interactiveFindings, {
+      color: shouldUseColor(options['no-color'] ? false : loadConfig().output.color),
+      repoDir: process.cwd(),
+      context_lines: loadConfig().output.context_lines || 2,
+    });
+    const modifiedFiles = interactiveResult ? interactiveResult.modifiedFiles || [] : [];
+    exitAfterRemediation(targets, modifiedFiles, scanOptions, false);
+  }
+
+  if (options['dry-run']) {
+    const preview = dryRun(fixScanResults, { repoDir: process.cwd() });
+    console.log(`\n  Dry run: ${preview.fixed} finding(s) would be fixed, ${preview.skipped} skipped.\n`);
+    for (const change of preview.changes) {
+      console.log(`  ${change.file}:${change.lineNumber || '?'}`);
+      if (change.before !== undefined) console.log(`    - ${change.before}`);
+      if (change.after !== undefined) console.log(`    + ${change.after}`);
+      console.log('');
+    }
+    for (const note of preview.notes) {
+      console.log(`  Note: ${note}`);
+    }
+    return;
+  }
+
+  const fixResult = fixAll(fixScanResults, { repoDir: process.cwd() });
+  console.log(`\n  Fixed ${fixResult.fixed} finding(s), ${fixResult.skipped} skipped.`);
+  if (fixResult.envEntries.length > 0) {
+    console.log(`  Secrets extracted to .env (${fixResult.envEntries.length} entries)`);
+  }
+  for (const w of fixResult.warnings) {
+    console.log(`  Warning: ${w}`);
+  }
+  for (const n of fixResult.notes) {
+    console.log(`  Note: ${n}`);
+  }
+  if (fixResult.verified) {
+    console.log('  Verified: secrets no longer appear in source files.');
+  } else {
+    console.log('  Warning: some secrets may still appear in source files. Please check manually.');
+  }
+
+  const recheck = scanFiles(targets, scanOptions);
+  if (recheck.errorCount > 0) {
+    printScanErrors(recheck);
+    console.log('  Re-scan incomplete.\n');
+    process.exit(1);
+  }
+  if (recheck.totalFindings === 0) {
+    console.log('  Re-scan: clean.\n');
+  } else {
+    console.log(`  Re-scan: ${recheck.totalFindings} finding(s) remain.\n`);
+    process.exit(1);
   }
 }
 
@@ -1006,6 +1272,14 @@ async function main() {
         await handleScan(files, options);
         break;
 
+      case 'verify':
+        await handleVerify(files, options);
+        break;
+
+      case 'incident':
+        await handleIncident(files, options);
+        break;
+
       case 'init':
         await handleInit();
         break;
@@ -1047,60 +1321,20 @@ async function main() {
         break;
 
       case 'fix': {
-        const scanOptions = { entropyThreshold: parseFloat(options['entropy-threshold']) || undefined };
-        if (options['dry-run']) {
-          const fixScanResults = scanFiles(getStagedFiles(), scanOptions);
-          if (fixScanResults.totalFindings === 0) {
-            console.log('  No findings to fix.');
-            process.exit(0);
-          }
-          const preview = dryRun(fixScanResults, { repoDir: process.cwd() });
-          console.log(`\n  Dry run: ${preview.fixed} finding(s) would be fixed, ${preview.skipped} skipped.\n`);
-          for (const change of preview.changes) {
-            console.log(`  ${change.file}:${change.lineNumber}`);
-            console.log(`    - ${change.before}`);
-            console.log(`    + ${change.after}`);
-            console.log('');
-          }
-          for (const note of preview.notes) {
-            console.log(`  Note: ${note}`);
-          }
-        } else if (options.undo) {
+        if (options.undo) {
           const undoResult = undo(process.cwd());
           if (undoResult.error) {
             console.log(`  ${undoResult.error}`);
             process.exit(1);
           }
           console.log(`  Undo complete: ${undoResult.restored} file(s) restored, ${undoResult.deleted} file(s) removed.`);
+          if (undoResult.skipped > 0) {
+            for (const conflict of undoResult.conflicts) {
+              console.log(`  Warning: ${conflict}`);
+            }
+          }
         } else {
-          const fixScanResults = scanFiles(getStagedFiles(), scanOptions);
-          if (fixScanResults.totalFindings === 0) {
-            console.log('  No findings to fix.');
-            process.exit(0);
-          }
-          const fixResult = fixAll(fixScanResults, { repoDir: process.cwd() });
-          console.log(`\n  Fixed ${fixResult.fixed} finding(s), ${fixResult.skipped} skipped.`);
-          if (fixResult.envEntries.length > 0) {
-            console.log(`  Secrets extracted to .env (${fixResult.envEntries.length} entries)`);
-          }
-          for (const w of fixResult.warnings) {
-            console.log(`  Warning: ${w}`);
-          }
-          for (const n of fixResult.notes) {
-            console.log(`  Note: ${n}`);
-          }
-          if (fixResult.verified) {
-            console.log('  Verified: secrets no longer appear in source files.');
-          } else {
-            console.log('  Warning: some secrets may still appear in source files. Please check manually.');
-          }
-          // Re-scan to confirm
-          const recheck = scanFiles(getStagedFiles(), scanOptions);
-          if (recheck.totalFindings === 0) {
-            console.log('  Re-scan: clean.\n');
-          } else {
-            console.log(`  Re-scan: ${recheck.totalFindings} finding(s) remain.\n`);
-          }
+          await handleFix(files, options);
         }
         break;
       }

@@ -4,6 +4,7 @@ module.exports = {
     {
       displayName: 'cli',
       testEnvironment: 'node',
+      setupFilesAfterEnv: ['<rootDir>/test/jest.setup.js'],
       testMatch: [
         '<rootDir>/test/**/*.test.js',
         '<rootDir>/src/cli/__tests__/**/*.test.js',
@@ -30,6 +31,19 @@ module.exports = {
           statements: 80,
         },
       },
+      testTimeout: 10000,
+    },
+    {
+      displayName: 'github-action',
+      testEnvironment: 'node',
+      setupFilesAfterEnv: ['<rootDir>/test/jest.setup.js'],
+      testMatch: ['<rootDir>/github-action/test/**/*.test.js'],
+      moduleNameMapper: {
+        '^@actions/core$': '<rootDir>/github-action/test/mocks/actions-core.js',
+        '^@actions/github$': '<rootDir>/github-action/test/mocks/actions-github.js',
+      },
+      collectCoverageFrom: ['github-action/action.js'],
+      coveragePathIgnorePatterns: ['/node_modules/'],
       testTimeout: 10000,
     },
   ],

@@ -12,8 +12,7 @@ const https = require('https');
 const http = require('http');
 const crypto = require('crypto');
 const fs = require('fs');
-const path = require('path');
-const os = require('os');
+const { getGatePath, ensureGateHome } = require('./paths');
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -27,8 +26,9 @@ const TOTAL_BUDGET = 5000;
 const CACHE_TTL = 60 * 60 * 1000;
 
 /** Path to verification cache */
-const GATE_DIR = path.join(os.homedir(), '.gate');
-const CACHE_PATH = path.join(GATE_DIR, 'verify-cache.json');
+function getCachePath() {
+  return getGatePath('verify-cache.json');
+}
 
 // ── HTTP Helper ──────────────────────────────────────────────────────────────
 
@@ -105,8 +105,9 @@ function hashCredential(credential) {
  */
 function loadCache() {
   try {
-    if (fs.existsSync(CACHE_PATH)) {
-      const data = fs.readFileSync(CACHE_PATH, 'utf8');
+    const cachePath = getCachePath();
+    if (fs.existsSync(cachePath)) {
+      const data = fs.readFileSync(cachePath, 'utf8');
       return JSON.parse(data);
     }
   } catch {
@@ -122,10 +123,8 @@ function loadCache() {
  */
 function saveCache(cache) {
   try {
-    if (!fs.existsSync(GATE_DIR)) {
-      fs.mkdirSync(GATE_DIR, { recursive: true, mode: 0o700 });
-    }
-    fs.writeFileSync(CACHE_PATH, JSON.stringify(cache, null, 2), { mode: 0o600 });
+    ensureGateHome();
+    fs.writeFileSync(getCachePath(), JSON.stringify(cache, null, 2), { mode: 0o600 });
   } catch {
     // Non-fatal: cache write failure should not block scanning
   }

@@ -366,6 +366,40 @@ describe('file size guard', () => {
     expect(scanner.formatBytes(4404019)).toBe('4.2MB');
     expect(scanner.formatBytes(1073741824)).toBe('1GB');
   });
+
+  test('scans large single-line files without pathological slowdown', () => {
+    const dir = createTempDir();
+    try {
+      const filePath = path.join(dir, 'huge-single-line.js');
+      fs.writeFileSync(filePath, 'x'.repeat(600 * 1024));
+
+      const startedAt = Date.now();
+      const results = scanner.scanFile(filePath, {});
+      const elapsedMs = Date.now() - startedAt;
+
+      expect(results.error).toBeNull();
+      expect(elapsedMs).toBeLessThan(2000);
+    } finally {
+      cleanDir(dir);
+    }
+  });
+
+  test('detects secrets embedded in very long single lines', () => {
+    const dir = createTempDir();
+    try {
+      const filePath = path.join(dir, 'bundle.js');
+      const content = 'x'.repeat(20_000) + 'AKIAIOSFODNN7EXAMPLE' + 'y'.repeat(20_000);
+      fs.writeFileSync(filePath, content);
+
+      const results = scanner.scanFile(filePath, {});
+
+      expect(results.findings.some(
+        (finding) => finding.ruleId === 'aws-access-key-id'
+      )).toBe(true);
+    } finally {
+      cleanDir(dir);
+    }
+  });
 });
 
 describe('multiline secret detection', () => {

@@ -14,12 +14,15 @@ const path = require('path');
 const https = require('https');
 const http = require('http');
 const { execSync, spawnSync } = require('child_process');
+const { getGatePath, ensureGateHome } = require('./paths');
 
-const GATE_DIR = path.join(require('os').homedir(), '.gate');
-const CHECK_FILE = path.join(GATE_DIR, 'update-check.json');
 const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const DEFAULT_API = 'https://gate.penumbraforge.com/api';
 const GITHUB_REPO = 'penumbraforge/gate';
+
+function getCheckFile() {
+  return getGatePath('update-check.json');
+}
 
 /**
  * Detect how gate was installed.
@@ -300,8 +303,9 @@ function printNotice(current, latest) {
 
 function readCache() {
   try {
-    if (!fs.existsSync(CHECK_FILE)) return null;
-    return JSON.parse(fs.readFileSync(CHECK_FILE, 'utf8'));
+    const checkFile = getCheckFile();
+    if (!fs.existsSync(checkFile)) return null;
+    return JSON.parse(fs.readFileSync(checkFile, 'utf8'));
   } catch {
     return null;
   }
@@ -309,11 +313,9 @@ function readCache() {
 
 function writeCache(latestVersion) {
   try {
-    if (!fs.existsSync(GATE_DIR)) {
-      fs.mkdirSync(GATE_DIR, { recursive: true, mode: 0o700 });
-    }
+    ensureGateHome();
     fs.writeFileSync(
-      CHECK_FILE,
+      getCheckFile(),
       JSON.stringify({ latestVersion, checkedAt: Date.now() }),
       { mode: 0o600 }
     );

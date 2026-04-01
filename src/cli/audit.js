@@ -4,20 +4,18 @@
  */
 
 const fs = require('fs');
-const path = require('path');
 const crypto = require('crypto');
-const os = require('os');
+const { getGatePath, ensureGateHome } = require('./paths');
 
-const AUDIT_LOG_PATH = path.join(os.homedir(), '.gate', 'audit.jsonl');
+function getAuditLogPath() {
+  return getGatePath('audit.jsonl');
+}
 
 /**
  * Ensure audit directory exists
  */
 function ensureAuditDir() {
-  const dir = path.dirname(AUDIT_LOG_PATH);
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-  }
+  return ensureGateHome();
 }
 
 /**
@@ -37,12 +35,12 @@ function calculateHash(content) {
  */
 function getPreviousHash() {
   try {
-    if (!fs.existsSync(AUDIT_LOG_PATH)) {
+    if (!fs.existsSync(getAuditLogPath())) {
       return null;
     }
 
     const lines = fs
-      .readFileSync(AUDIT_LOG_PATH, 'utf8')
+      .readFileSync(getAuditLogPath(), 'utf8')
       .trim()
       .split('\n')
       .filter((line) => line.length > 0);
@@ -115,7 +113,7 @@ function recordScan(entry) {
     auditEntry.hash = calculateHash(entryContent);
 
     // Append to log
-    fs.appendFileSync(AUDIT_LOG_PATH, JSON.stringify(auditEntry) + '\n', { mode: 0o600 });
+    fs.appendFileSync(getAuditLogPath(), JSON.stringify(auditEntry) + '\n', { mode: 0o600 });
 
     return true;
   } catch (error) {
@@ -131,12 +129,12 @@ function recordScan(entry) {
  */
 function readAuditLog() {
   try {
-    if (!fs.existsSync(AUDIT_LOG_PATH)) {
+    if (!fs.existsSync(getAuditLogPath())) {
       return [];
     }
 
     const lines = fs
-      .readFileSync(AUDIT_LOG_PATH, 'utf8')
+      .readFileSync(getAuditLogPath(), 'utf8')
       .trim()
       .split('\n')
       .filter((line) => line.length > 0);
@@ -420,8 +418,9 @@ function getStatistics() {
  */
 function clearAuditLog() {
   try {
-    if (fs.existsSync(AUDIT_LOG_PATH)) {
-      fs.unlinkSync(AUDIT_LOG_PATH);
+    const auditLogPath = getAuditLogPath();
+    if (fs.existsSync(auditLogPath)) {
+      fs.unlinkSync(auditLogPath);
     }
     return true;
   } catch (error) {
@@ -431,7 +430,8 @@ function clearAuditLog() {
 }
 
 module.exports = {
-  AUDIT_LOG_PATH,
+  AUDIT_LOG_PATH: getAuditLogPath(),
+  getAuditLogPath,
   recordScan,
   readAuditLog,
   verifyIntegrity,

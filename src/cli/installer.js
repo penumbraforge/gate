@@ -21,6 +21,7 @@ function findGitRoot(cwd) {
     const gitRoot = execSync('git rev-parse --git-dir', {
       encoding: 'utf8',
       cwd: cwd || process.cwd(),
+      stdio: ['pipe', 'pipe', 'ignore'],
     }).trim();
 
     // If result is relative, make it absolute
@@ -48,7 +49,9 @@ function getHooksDir(cwd) {
   // Check for custom hooks path configured via git
   try {
     const customPath = execSync('git config core.hooksPath', {
-      encoding: 'utf8', cwd: workDir,
+      encoding: 'utf8',
+      cwd: workDir,
+      stdio: ['pipe', 'pipe', 'ignore'],
     }).trim();
     if (customPath) {
       const resolved = path.isAbsolute(customPath) ? customPath : path.resolve(workDir, customPath);

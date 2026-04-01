@@ -453,32 +453,39 @@ function generateSARIF(scanResults, options = {}) {
     version = '0.0.0';
   }
 
-  const results = (scanResults.filesScanned || []).flatMap(fileResult =>
-    (fileResult.findings || []).map(finding => {
-      const sarifResult = {
-        ruleId: finding.ruleId,
-        level: severityToSARIFLevel(finding.severity),
-        message: { text: finding.ruleName || finding.ruleId },
-        locations: [
-          {
-            physicalLocation: {
-              artifactLocation: { uri: fileResult.file },
-              region: {
-                startLine: finding.lineNumber || 1,
-                startColumn: (finding.matchStart || 0) + 1,
-              },
+  const flattenedFindings = Array.isArray(options.findings)
+    ? options.findings
+    : (scanResults.filesScanned || []).flatMap(fileResult =>
+      (fileResult.findings || []).map(finding => ({
+        ...finding,
+        file: finding.file || fileResult.file,
+      }))
+    );
+
+  const results = flattenedFindings.map(finding => {
+    const sarifResult = {
+      ruleId: finding.ruleId,
+      level: severityToSARIFLevel(finding.severity),
+      message: { text: finding.ruleName || finding.ruleId },
+      locations: [
+        {
+          physicalLocation: {
+            artifactLocation: { uri: finding.file },
+            region: {
+              startLine: finding.lineNumber || 1,
+              startColumn: (finding.matchStart || 0) + 1,
             },
           },
-        ],
-      };
+        },
+      ],
+    };
 
-      if (finding.verification) {
-        sarifResult.properties = { verification: finding.verification };
-      }
+    if (finding.verification) {
+      sarifResult.properties = { verification: finding.verification };
+    }
 
-      return sarifResult;
-    })
-  );
+    return sarifResult;
+  });
 
   return {
     $schema: 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json',
@@ -517,30 +524,57 @@ function generateJSONReport(scanResults, options = {}) {
   }
 
   const allFindings = [];
+  const errors = Array.isArray(scanResults.errors) ? scanResults.errors : [];
+  const skipped = Array.isArray(scanResults.skippedFiles) ? scanResults.skippedFiles : [];
+  const uniqueFiles = new Set();
+
+  const flattenedFindings = Array.isArray(options.findings)
+    ? options.findings
+    : null;
 
   for (const fileResult of (scanResults.filesScanned || [])) {
-    for (const finding of (fileResult.findings || [])) {
-      const remediation = getRemediation(finding.ruleId);
-      const compliance  = finding.compliance || getCompliance(finding.ruleId);
-
-      allFindings.push({
-        ruleId:       finding.ruleId,
-        ruleName:     finding.ruleName || finding.ruleId,
-        severity:     finding.severity || 'unknown',
-        file:         fileResult.file,
-        line:         finding.lineNumber || null,
-        column:       finding.matchStart != null ? finding.matchStart + 1 : null,
-        match:        finding.match || null,
-        verification: finding.verification ? finding.verification.status || finding.verification : 'unknown',
-        exposure:     finding.exposure || 'unknown',
-        remediation: {
-          action: remediation.action || 'review',
-          guide:  remediation.guide  || '',
-          link:   remediation.link   || null,
-        },
-        compliance,
-      });
+    if (fileResult.file) {
+      uniqueFiles.add(fileResult.file);
+    } else if (Array.isArray(fileResult.filesScanned)) {
+      for (const scannedFile of fileResult.filesScanned) {
+        uniqueFiles.add(scannedFile);
+      }
     }
+  }
+
+  const findingsSource = flattenedFindings || (scanResults.filesScanned || []).flatMap((fileResult) =>
+    (fileResult.findings || []).map((finding) => ({
+      ...finding,
+      file: finding.file || fileResult.file || null,
+    }))
+  );
+
+  for (const finding of findingsSource) {
+    const remediation = getRemediation(finding.ruleId);
+    const compliance  = finding.compliance || getCompliance(finding.ruleId);
+    const findingFile = finding.file || null;
+
+    if (findingFile) {
+      uniqueFiles.add(findingFile);
+    }
+
+    allFindings.push({
+      ruleId:       finding.ruleId,
+      ruleName:     finding.ruleName || finding.ruleId,
+      severity:     finding.severity || 'unknown',
+      file:         findingFile,
+      line:         finding.lineNumber || null,
+      column:       finding.matchStart != null ? finding.matchStart + 1 : null,
+      match:        finding.match || null,
+      verification: finding.verification ? finding.verification.status || finding.verification : 'unknown',
+      exposure:     finding.exposure || 'unknown',
+      remediation: {
+        action: remediation.action || 'review',
+        guide:  remediation.guide  || '',
+        link:   remediation.link   || null,
+      },
+      compliance,
+    });
   }
 
   // Count severities
@@ -562,13 +596,17 @@ function generateJSONReport(scanResults, options = {}) {
     version,
     timestamp: new Date().toISOString(),
     findings: allFindings,
+    errors,
+    skipped,
     summary: {
-      filesScanned:  (scanResults.filesScanned || []).length,
+      filesScanned:  uniqueFiles.size || (scanResults.filesScanned || []).length,
       totalFindings: allFindings.length,
       critical:      severityCounts.critical,
       high:          severityCounts.high,
       medium:        severityCounts.medium,
       low:           severityCounts.low,
+      errors:        errors.length,
+      skipped:       skipped.length,
       verified,
     },
   };

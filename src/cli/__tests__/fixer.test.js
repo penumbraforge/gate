@@ -613,12 +613,51 @@ describe('snapshot management', () => {
       }
     }
   });
+
+  test('30. Snapshot backups do not collide for distinct relative paths', () => {
+    const dir = createTempDir();
+    try {
+      const flatFile = path.join(dir, 'config__prod.js');
+      const nestedDir = path.join(dir, 'config');
+      const nestedFile = path.join(nestedDir, 'prod.js');
+      fs.mkdirSync(nestedDir, { recursive: true });
+
+      const flatContent = 'const flat = "sk_live_flat_secret_123456";\n';
+      const nestedContent = 'const nested = "sk_live_nested_secret_654321";\n';
+      fs.writeFileSync(flatFile, flatContent);
+      fs.writeFileSync(nestedFile, nestedContent);
+
+      const scanResults = makeScanResults([
+        {
+          file: flatFile,
+          findings: [makeFinding('stripe-live-secret', 'sk_live_flat_secret_123456')],
+        },
+        {
+          file: nestedFile,
+          findings: [makeFinding('stripe-live-secret', 'sk_live_nested_secret_654321')],
+        },
+      ]);
+
+      fixer.fixAll(scanResults, { repoDir: dir });
+      const undoResult = fixer.undo(dir);
+
+      expect(undoResult.restored).toBeGreaterThanOrEqual(2);
+      expect(fs.readFileSync(flatFile, 'utf8')).toBe(flatContent);
+      expect(fs.readFileSync(nestedFile, 'utf8')).toBe(nestedContent);
+    } finally {
+      cleanDir(dir);
+      const snapshotDir = fixer._getSnapshotDir(dir);
+      if (fs.existsSync(snapshotDir)) {
+        fs.rmSync(snapshotDir, { recursive: true, force: true });
+      }
+    }
+  });
 });
 
 // ─── Verification after fix ─────────────────────────────────────────────────
 describe('verification', () => {
-  // ─── 30. Re-scan passes ──────────────────────────────────────────────────
-  test('30. Verification after fix: re-scan passes', () => {
+  // ─── 31. Re-scan passes ──────────────────────────────────────────────────
+  test('31. Verification after fix: re-scan passes', () => {
     const dir = createTempDir();
     try {
       const filePath = path.join(dir, 'config.js');

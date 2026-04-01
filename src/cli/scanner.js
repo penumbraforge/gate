@@ -27,6 +27,71 @@ const CONFIG_EXTENSIONS = new Set([
 ]);
 
 const MINIFIED_PATTERNS = ['.min.js', '.min.css', '.bundle.js', '.bundle.css'];
+const MAX_LINE_SCAN_LENGTH = 16 * 1024;
+const LINE_SCAN_OVERLAP = 1024;
+const SECRET_INDICATOR_RE = /[A-Z0-9"'`:=/_@.-]/;
+
+function expandTargets(filePaths, options = {}) {
+  const cwd = options.cwd || process.cwd();
+  const configDir = options.configDir || cwd;
+  const seen = new Set();
+  const expanded = [];
+
+  function addTarget(targetPath) {
+    const key = path.normalize(targetPath);
+    if (seen.has(key)) return;
+    seen.add(key);
+    expanded.push(targetPath);
+  }
+
+  function visit(target, preserveRelative, depth = 0) {
+    const absoluteTarget = path.isAbsolute(target)
+      ? target
+      : path.resolve(cwd, target);
+
+    if (!fs.existsSync(absoluteTarget)) {
+      addTarget(target);
+      return;
+    }
+
+    let stat;
+    try {
+      stat = fs.lstatSync(absoluteTarget);
+    } catch {
+      addTarget(preserveRelative ? path.relative(cwd, absoluteTarget) : absoluteTarget);
+      return;
+    }
+
+    const outputPath = preserveRelative ? path.relative(cwd, absoluteTarget) : absoluteTarget;
+    if (options.ignorePatterns && depth > 0) {
+      const relativePath = path.relative(configDir, absoluteTarget);
+      if (shouldIgnoreFile(relativePath, options.ignorePatterns)) {
+        return;
+      }
+    }
+
+    if (stat.isSymbolicLink()) {
+      return;
+    }
+
+    if (stat.isDirectory()) {
+      const entries = fs.readdirSync(absoluteTarget, { withFileTypes: true })
+        .sort((a, b) => a.name.localeCompare(b.name));
+      for (const entry of entries) {
+        visit(path.join(outputPath, entry.name), preserveRelative, depth + 1);
+      }
+      return;
+    }
+
+    addTarget(outputPath);
+  }
+
+  for (const filePath of filePaths) {
+    visit(filePath, !path.isAbsolute(filePath));
+  }
+
+  return expanded;
+}
 
 /**
  * Format a byte count into a human-readable string
@@ -388,6 +453,11 @@ function scanFile(filePath, options = {}) {
     const stats = fs.statSync(filePath);
     results.size = stats.size;
 
+    if (stats.isDirectory()) {
+      results.error = `Cannot scan ${filePath}: Target is a directory`;
+      return results;
+    }
+
     // Skip files exceeding size limit to prevent OOM
     const maxFileSize = options.maxFileSize || DEFAULT_MAX_FILE_SIZE;
     if (results.size > maxFileSize) {
@@ -420,10 +490,11 @@ function scanFile(filePath, options = {}) {
     const multilineFindings = extractMultilineStrings(content, scanOptions);
     results.findings.push(...multilineFindings);
 
-    // Scan each line
+    // Scan each line. Very long single-line files can trigger pathological
+    // regex performance, so scan them in bounded overlapping windows.
     const lines = content.split('\n');
     for (let i = 0; i < lines.length; i++) {
-      const lineFindings = scanForPatterns(lines[i], i + 1, scanOptions);
+      const lineFindings = scanLineInChunks(lines[i], i + 1, scanOptions);
       results.findings.push(...lineFindings);
     }
     // Deduplicate findings — keep highest severity per (lineNumber, matchStart, matchLength)
@@ -448,6 +519,47 @@ function scanFile(filePath, options = {}) {
   }
 
   return results;
+}
+
+/**
+ * Scan a line in bounded overlapping chunks to prevent regex DoS on very long
+ * minified or malformed lines while preserving absolute match offsets.
+ *
+ * @param {string} line - Line content
+ * @param {number} lineNumber - 1-based line number
+ * @param {object} options - Scanner options
+ * @returns {array} Array of findings
+ */
+function scanLineInChunks(line, lineNumber, options = {}) {
+  if (line.length <= MAX_LINE_SCAN_LENGTH) {
+    return scanForPatterns(line, lineNumber, options);
+  }
+
+  const findings = [];
+  const step = MAX_LINE_SCAN_LENGTH - LINE_SCAN_OVERLAP;
+
+  for (let start = 0; start < line.length; start += step) {
+    const chunk = line.slice(start, start + MAX_LINE_SCAN_LENGTH);
+    if (!SECRET_INDICATOR_RE.test(chunk)) {
+      if (start + MAX_LINE_SCAN_LENGTH >= line.length) {
+        break;
+      }
+      continue;
+    }
+    const chunkFindings = scanForPatterns(chunk, lineNumber, options).map((finding) => ({
+      ...finding,
+      matchStart: typeof finding.matchStart === 'number'
+        ? finding.matchStart + start
+        : finding.matchStart,
+    }));
+    findings.push(...chunkFindings);
+
+    if (start + MAX_LINE_SCAN_LENGTH >= line.length) {
+      break;
+    }
+  }
+
+  return findings;
 }
 
 /**
@@ -514,6 +626,10 @@ function scanFiles(filePaths, options = {}) {
     timestamp: new Date().toISOString(),
     filesScanned: [],
     totalFindings: 0,
+    errorCount: 0,
+    skippedCount: 0,
+    errors: [],
+    skippedFiles: [],
     severityCounts: {
       critical: 0,
       high: 0,
@@ -522,10 +638,16 @@ function scanFiles(filePaths, options = {}) {
     },
   };
 
-  for (let i = 0; i < filePaths.length; i++) {
-    const filePath = filePaths[i];
+  const expandedTargets = expandTargets(filePaths, {
+    cwd: options.cwd || process.cwd(),
+    configDir,
+    ignorePatterns,
+  });
+
+  for (let i = 0; i < expandedTargets.length; i++) {
+    const filePath = expandedTargets[i];
     if (options.onProgress) {
-      options.onProgress(i, filePaths.length, filePath);
+      options.onProgress(i, expandedTargets.length, filePath);
     }
     const fileResults = scanFile(filePath, scanOptions);
 
@@ -554,6 +676,19 @@ function scanFiles(filePaths, options = {}) {
     });
 
     results.filesScanned.push(fileResults);
+
+    if (fileResults.error) {
+      results.errorCount++;
+      results.errors.push({ file: fileResults.file, error: fileResults.error });
+    }
+
+    if (fileResults.skipped) {
+      results.skippedCount++;
+      results.skippedFiles.push({
+        file: fileResults.file,
+        reason: fileResults.skipReason || 'Skipped',
+      });
+    }
 
     // Count findings by severity
     for (const finding of fileResults.findings) {
@@ -652,4 +787,6 @@ module.exports = {
   getCurrentCommitHash,
   getEntropyThresholdForFile,
   formatBytes,
+  expandTargets,
+  scanLineInChunks,
 };
