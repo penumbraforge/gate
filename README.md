@@ -2,9 +2,9 @@
 
 # Gate
 
-**The first secret scanner that fixes what it finds. For free.**
+**The secret scanner that fixes what it finds. For free.**
 
-Gate catches secrets before they're committed, verifies if they're live, and auto-fixes them across 9 languages. It generates compliance reports, incident documentation, and git history purge scripts. No other free tool does this.
+Gate catches secrets before they're committed, verifies if they're live, and auto-fixes them across 9 languages. It generates compliance reports, incident documentation, and git history purge scripts — the remediation most scanners leave to you.
 
 ## Quick Start
 
@@ -39,14 +39,16 @@ That's it. Every commit is now protected.
 | Capability | Gitleaks | TruffleHog | GitHub | GitGuardian | **Gate** |
 |---|---|---|---|---|---|
 | Detection rules | 170 | 800+ | Partners | 482 | **148** |
-| Credential verification | No | Yes | Paid | Paid | **Yes** |
+| Credential verification | No | Yes | Partial | Paid | **Yes** |
 | Auto-fix / extract to env | No | No | No | No | **Yes** |
 | Interactive remediation | No | No | No | No | **Yes** |
 | Incident response workflow | No | No | No | Paid | **Yes** |
 | Compliance reports | No | No | Paid | Paid | **Yes** |
-| SARIF output | Yes | Yes | N/A | No | **Yes** |
+| SARIF output | Yes | Yes | N/A | Yes | **Yes** |
 | 100% free, unlimited | Yes | Yes | Public only | 25 devs | **Yes** |
 | Runs 100% locally | Yes | Yes | No | No | **Yes** |
+
+<sub>Comparison reflects publicly documented free-tier features as of August 2026. Spot an error? Open an issue and it gets fixed.</sub>
 
 ## How It Looks
 
@@ -101,7 +103,6 @@ gate help              Show all commands
 ```bash
 npx @penumbraforge/gate         # Zero-install (runs via npx)
 npm install -g @penumbraforge/gate   # Global install
-brew install gate               # Homebrew (coming soon)
 ```
 
 ## GitHub Action
