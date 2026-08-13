@@ -179,6 +179,31 @@ function envVarRef(language, varName) {
  * @param {string} language
  * @returns {string|null} rewritten line, or null if no replacement was possible
  */
+/**
+ * If `secretValue` appears as a fragment inside a quoted string literal on
+ * `line` (but is not already the entire quoted content), return the full
+ * inner content of that quoted literal; otherwise return null.
+ *
+ * This recovers the complete secret for rules whose pattern captures only
+ * part of a quoted value — e.g. a DB connection string where the trailing
+ * path wasn't matched.
+ *
+ * @param {string} line
+ * @param {string} secretValue
+ * @returns {string|null}
+ */
+function enclosingQuotedValue(line, secretValue) {
+  if (!secretValue) return null;
+  // Already a standalone quoted literal → nothing to widen.
+  if (line.includes(`"${secretValue}"`) || line.includes(`'${secretValue}'`)) return null;
+  const escaped = secretValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  for (const [open, inner] of [['"', '[^"]'], ["'", "[^']"]]) {
+    const m = line.match(new RegExp(`${open}(${inner}*${escaped}${inner}*)${open}`));
+    if (m && m[1] !== secretValue) return m[1];
+  }
+  return null;
+}
+
 function rewriteLine(line, secretValue, ref, language) {
   const doubleQuoted = `"${secretValue}"`;
   const singleQuoted = `'${secretValue}'`;
@@ -205,6 +230,22 @@ function rewriteLine(line, secretValue, ref, language) {
   if (line.includes(singleQuoted)) {
     return line.replace(singleQuoted, ref);
   }
+
+  // Secret sits INSIDE a larger quoted literal — e.g. a connection string
+  // whose path/query the rule's pattern didn't capture
+  // ("postgres://…:5432/prod"). Replacing only the matched substring would
+  // leave a broken `"process.env.X/prod"` fragment, so replace the whole
+  // enclosing quoted literal instead.
+  const escaped = secretValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const inDouble = new RegExp(`"[^"]*${escaped}[^"]*"`);
+  if (inDouble.test(line)) {
+    return line.replace(inDouble, ref);
+  }
+  const inSingle = new RegExp(`'[^']*${escaped}[^']*'`);
+  if (inSingle.test(line)) {
+    return line.replace(inSingle, ref);
+  }
+
   // Bare value (terraform, dockerfile, etc.)
   if (line.includes(secretValue)) {
     return line.replace(secretValue, ref);
@@ -551,13 +592,20 @@ function pruneSnapshots(snapshotDir) {
 function fixFinding(finding, filePath, options = {}) {
   const { repoDir, dryRun = false } = options;
   const language = detectLanguage(filePath);
-  const secretValue = finding.secret || finding.match;
+  const rawSecret = finding.secret || finding.match;
 
   // Derive env var name
   const fileContent = fs.readFileSync(filePath, 'utf8');
   const lines = fileContent.split('\n');
   const lineIdx = finding.lineNumber - 1;
   const line = lines[lineIdx] || '';
+
+  // If the detected secret is a fragment inside a larger quoted literal
+  // (e.g. a connection string whose path/query the rule didn't capture),
+  // the whole quoted content is the real secret. Use it for BOTH the .env
+  // value and the source rewrite so they stay consistent — otherwise the
+  // extracted value would be truncated while the source was fully replaced.
+  const secretValue = enclosingQuotedValue(line, rawSecret) || rawSecret;
   const varName = deriveEnvVarName(finding.ruleId, line);
 
   const result = {

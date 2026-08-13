@@ -80,6 +80,37 @@ describe('language-aware code rewriting', () => {
     }
   });
 
+  // ─── Partial secret inside a larger quoted literal (connection strings) ────
+  test('secret captured as a fragment inside quotes → whole literal replaced, full value extracted', () => {
+    const dir = createTempDir();
+    try {
+      const filePath = path.join(dir, 'db.js');
+      // The postgres-uri rule captures the URI but not the trailing /prod path.
+      // finding.match is the partial URI; the source has the full one in quotes.
+      const fullUri = 'postgres://admin:hunter2pw@db.internal:5432/prod';
+      const partial = 'postgres://admin:hunter2pw@db.internal:5432';
+      fs.writeFileSync(filePath, `const dbUrl = "${fullUri}";\n`);
+      const finding = makeFinding('postgres-uri', partial);
+      finding.secret = partial;
+      const scanResults = makeScanResults([{ file: filePath, findings: [finding] }]);
+
+      const result = fixer.fixAll(scanResults, { repoDir: dir });
+      const content = fs.readFileSync(filePath, 'utf8');
+
+      // Source is valid: no dangling quote, no leftover /prod fragment.
+      expect(content).toMatch(/const dbUrl = process\.env\.[A-Z_]+;/);
+      expect(content).not.toContain('postgres://');
+      expect(content).not.toContain('"process.env');
+
+      // The .env value is the COMPLETE URI, including the /prod path.
+      const env = fs.readFileSync(path.join(dir, '.env'), 'utf8');
+      expect(env).toContain(fullUri);
+      expect(result.fixed).toBe(1);
+    } finally {
+      cleanDir(dir);
+    }
+  });
+
   // ─── 3. JS: single quotes ──────────────────────────────────────────────────
   test('3. JS: let x = \'secret\' (single quotes)', () => {
     const dir = createTempDir();

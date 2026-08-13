@@ -692,7 +692,11 @@ async function handleScan(files, options) {
       const choice = await promptHookAction(useColor);
 
       if (choice === 'f') {
-        const freshResults = scanFiles(getStagedFiles(), scanOptions);
+        // Re-scan the SAME files that produced these findings — not the
+        // staged set. `gate scan <path>` on an unstaged file would otherwise
+        // re-scan an empty staged list and report "No findings to fix".
+        // (In pre-commit mode filesToScan already is the staged set.)
+        const freshResults = scanFiles(filesToScan, scanOptions);
         if (freshResults.totalFindings === 0) {
           console.log('\n  No findings to fix.\n');
           process.exit(0);
