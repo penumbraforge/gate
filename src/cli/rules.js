@@ -45,7 +45,8 @@ const RULES = [
   {
     id: 'aws-secret-access-key',
     name: 'AWS Secret Access Key',
-    pattern: /aws_secret_access_key\s*=\s*[A-Za-z0-9\/+=]{40}/i,
+    pattern: /aws_secret_access_key\s*=\s*([A-Za-z0-9\/+=]{40})/i,
+    secretGroup: 1,
     entropy: false,
     severity: 'critical',
     provider: 'AWS',
@@ -55,7 +56,8 @@ const RULES = [
   {
     id: 'aws-account-id',
     name: 'AWS Account ID (in context)',
-    pattern: /(?:aws|account)[_\s-]*id\s*[=:]\s*\d{12}\b/i,
+    pattern: /(?:aws|account)[_\s-]*id\s*[=:]\s*(\d{12})\b/i,
+    secretGroup: 1,
     entropy: false,
     severity: 'low',
     provider: 'AWS',
@@ -205,7 +207,8 @@ const RULES = [
   {
     id: 'azure-storage-key',
     name: 'Azure Storage Account Key',
-    pattern: /AccountKey=[A-Za-z0-9+/=]{88}|AccountKey=[A-Za-z0-9+/=]{86}/i,
+    pattern: /AccountKey=((?:[A-Za-z0-9+/=]{88})|(?:[A-Za-z0-9+/=]{86}))/i,
+    secretGroup: 1,
     entropy: false,
     severity: 'critical',
     provider: 'Azure',
@@ -279,7 +282,8 @@ const RULES = [
   {
     id: 'password-assignment',
     name: 'Password Assignment',
-    pattern: /password\s*=\s*['"]{0,1}[^\s'"]{8,}['"]{0,1}/i,
+    pattern: /password\s*=\s*['"]{0,1}([^\s'"]{8,})['"]{0,1}/i,
+    secretGroup: 1,
     entropy: false,
     severity: 'high',
     provider: 'Generic',
@@ -289,7 +293,8 @@ const RULES = [
   {
     id: 'api-key-assignment',
     name: 'API Key Assignment',
-    pattern: /api[_-]?key\s*[=:]\s*['"]{0,1}[^\s'"]{8,}['"]{0,1}/i,
+    pattern: /api[_-]?key\s*[=:]\s*['"]{0,1}([^\s'"]{8,})['"]{0,1}/i,
+    secretGroup: 1,
     entropy: false,
     severity: 'high',
     provider: 'Generic',
@@ -299,7 +304,8 @@ const RULES = [
   {
     id: 'secret-assignment',
     name: 'Secret Assignment',
-    pattern: /secret\s*[=:]\s*['"]{0,1}[^\s'"]{8,}['"]{0,1}/i,
+    pattern: /secret\s*[=:]\s*['"]{0,1}([^\s'"]{8,})['"]{0,1}/i,
+    secretGroup: 1,
     entropy: false,
     severity: 'high',
     provider: 'Generic',
@@ -309,7 +315,8 @@ const RULES = [
   {
     id: 'token-assignment',
     name: 'Token Assignment',
-    pattern: /token\s*[=:]\s*['"]{0,1}[^\s'"]{8,}['"]{0,1}/i,
+    pattern: /token\s*[=:]\s*['"]{0,1}([^\s'"]{8,})['"]{0,1}/i,
+    secretGroup: 1,
     entropy: false,
     severity: 'high',
     provider: 'Generic',
@@ -319,7 +326,8 @@ const RULES = [
   {
     id: 'auth-header',
     name: 'Authorization Header',
-    pattern: /Authorization\s*:\s*Bearer\s+[A-Za-z0-9._-]+/i,
+    pattern: /Authorization\s*:\s*Bearer\s+([A-Za-z0-9._-]+)/i,
+    secretGroup: 1,
     entropy: false,
     severity: 'high',
     provider: 'Generic',
@@ -331,7 +339,7 @@ const RULES = [
   {
     id: 'mongodb-uri',
     name: 'MongoDB Connection String',
-    pattern: /mongodb(\+srv)?:\/\/[^\s:]+:[^\s@]+@[^\s/]+/i,
+    pattern: /mongodb(?:\+srv)?:\/\/[^\s:]+:[^\s@]+@[^\s/]+/i,
     entropy: false,
     severity: 'critical',
     provider: 'MongoDB',
@@ -341,7 +349,7 @@ const RULES = [
   {
     id: 'postgres-uri',
     name: 'PostgreSQL Connection String',
-    pattern: /postgres(ql)?:\/\/[^\s:]+:[^\s@]+@[^\s/]+/i,
+    pattern: /postgres(?:ql)?:\/\/[^\s:]+:[^\s@]+@[^\s/]+/i,
     entropy: false,
     severity: 'critical',
     provider: 'PostgreSQL',
@@ -470,7 +478,8 @@ const RULES = [
   {
     id: 'env-var-secret',
     name: 'Environment Variable Secret',
-    pattern: /^\s*[A-Z_]+_(?:SECRET|KEY|TOKEN|PASSWORD)\s*=\s*[^\s]+$/im,
+    pattern: /^\s*[A-Z_]+_(?:SECRET|KEY|TOKEN|PASSWORD)\s*=\s*([^\s]+)$/im,
+    secretGroup: 1,
     entropy: false,
     severity: 'high',
     provider: 'Generic',
@@ -494,7 +503,8 @@ const RULES = [
   {
     id: 'oauth-bearer',
     name: 'OAuth2 Bearer Token',
-    pattern: /bearer\s+[A-Za-z0-9._-]{20,}/i,
+    pattern: /bearer\s+([A-Za-z0-9._-]{20,})/i,
+    secretGroup: 1,
     entropy: false,
     severity: 'high',
     provider: 'Generic',
@@ -506,7 +516,8 @@ const RULES = [
   {
     id: 'heroku-token',
     name: 'Heroku API Token',
-    pattern: /(?:HEROKU|heroku)[_\s]*(?:API[_\s]*)?(?:KEY|TOKEN|SECRET)\s*[=:]\s*[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i,
+    pattern: /(?:HEROKU|heroku)[_\s]*(?:API[_\s]*)?(?:KEY|TOKEN|SECRET)\s*[=:]\s*([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i,
+    secretGroup: 1,
     entropy: false,
     severity: 'high',
     provider: 'Heroku',
@@ -518,7 +529,8 @@ const RULES = [
   {
     id: 'datadog-api-key',
     name: 'Datadog API Key',
-    pattern: /dd_api_key\s*=\s*[a-f0-9]{32}/i,
+    pattern: /dd_api_key\s*=\s*([a-f0-9]{32})/i,
+    secretGroup: 1,
     entropy: false,
     severity: 'critical',
     provider: 'Datadog',
@@ -615,7 +627,8 @@ const RULES = [
   {
     id: 'slack-signing-secret',
     name: 'Slack Signing Secret',
-    pattern: /signing.?secret\s*[=:]\s*[A-Za-z0-9]{32}/i,
+    pattern: /signing.?secret\s*[=:]\s*([A-Za-z0-9]{32})/i,
+    secretGroup: 1,
     entropy: false,
     severity: 'critical',
     provider: 'Slack',
@@ -629,7 +642,8 @@ const RULES = [
   {
     id: 'vercel-token',
     name: 'Vercel API Token',
-    pattern: /(?:VERCEL_TOKEN|vercel[_-]token|vercel[_-]api[_-]token)[\s]*[=:][\s]*[A-Za-z0-9]{24}/,
+    pattern: /(?:VERCEL_TOKEN|vercel[_-]token|vercel[_-]api[_-]token)[\s]*[=:][\s]*([A-Za-z0-9]{24})/,
+    secretGroup: 1,
     entropy: false,
     severity: 'high',
     provider: 'Vercel',
@@ -653,7 +667,8 @@ const RULES = [
   {
     id: 'cloudflare-api-key',
     name: 'Cloudflare Global API Key',
-    pattern: /(?:CF_API_KEY|CLOUDFLARE_API_KEY|cloudflare[_-]api[_-]key)[\s]*[=:][\s]*[a-f0-9]{40}/,
+    pattern: /(?:CF_API_KEY|CLOUDFLARE_API_KEY|cloudflare[_-]api[_-]key)[\s]*[=:][\s]*([a-f0-9]{40})/,
+    secretGroup: 1,
     entropy: false,
     severity: 'high',
     provider: 'Cloudflare',
@@ -663,7 +678,8 @@ const RULES = [
   {
     id: 'cloudflare-api-token',
     name: 'Cloudflare API Token',
-    pattern: /(?:CLOUDFLARE_TOKEN|CF_TOKEN|cloudflare[_-]token)[\s]*[=:][\s]*[A-Za-z0-9_-]{40}/,
+    pattern: /(?:CLOUDFLARE_TOKEN|CF_TOKEN|cloudflare[_-]token)[\s]*[=:][\s]*([A-Za-z0-9_-]{40})/,
+    secretGroup: 1,
     entropy: false,
     severity: 'high',
     provider: 'Cloudflare',
@@ -747,7 +763,8 @@ const RULES = [
   {
     id: 'railway-token',
     name: 'Railway API Token',
-    pattern: /(?:RAILWAY_TOKEN|railway[_-]token)[\s]*[=:][\s]*railway_[A-Za-z0-9_-]{30,}/,
+    pattern: /(?:RAILWAY_TOKEN|railway[_-]token)[\s]*[=:][\s]*(railway_[A-Za-z0-9_-]{30,})/,
+    secretGroup: 1,
     entropy: false,
     severity: 'high',
     provider: 'Railway',
@@ -795,7 +812,8 @@ const RULES = [
   {
     id: 'upstash-token',
     name: 'Upstash Redis/Kafka Token',
-    pattern: /(?:UPSTASH_REDIS_REST_TOKEN|UPSTASH_KAFKA_REST_PASSWORD|upstash[_-](?:redis|kafka)[_-](?:rest[_-])?(?:token|password))[\s]*[=:][\s]*[A-Za-z0-9_-]{40,}/,
+    pattern: /(?:UPSTASH_REDIS_REST_TOKEN|UPSTASH_KAFKA_REST_PASSWORD|upstash[_-](?:redis|kafka)[_-](?:rest[_-])?(?:token|password))[\s]*[=:][\s]*([A-Za-z0-9_-]{40,})/,
+    secretGroup: 1,
     entropy: false,
     severity: 'high',
     provider: 'Upstash',
@@ -807,7 +825,8 @@ const RULES = [
   {
     id: 'neon-api-key',
     name: 'Neon Database API Key',
-    pattern: /(?:NEON_API_KEY|neon[_-]api[_-]key)[\s]*[=:][\s]*neon_[A-Za-z0-9_-]{40,}/,
+    pattern: /(?:NEON_API_KEY|neon[_-]api[_-]key)[\s]*[=:][\s]*(neon_[A-Za-z0-9_-]{40,})/,
+    secretGroup: 1,
     entropy: false,
     severity: 'high',
     provider: 'Neon',
@@ -819,7 +838,8 @@ const RULES = [
   {
     id: 'turso-token',
     name: 'Turso Auth Token',
-    pattern: /(?:TURSO_AUTH_TOKEN|turso[_-]auth[_-]token)[\s]*[=:][\s]*eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/,
+    pattern: /(?:TURSO_AUTH_TOKEN|turso[_-]auth[_-]token)[\s]*[=:][\s]*(eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)/,
+    secretGroup: 1,
     entropy: false,
     severity: 'high',
     provider: 'Turso',
@@ -843,7 +863,8 @@ const RULES = [
   {
     id: 'mistral-api-key',
     name: 'Mistral AI API Key',
-    pattern: /(?:MISTRAL_API_KEY|mistral[_-]api[_-]key)[\s]*[=:][\s]*[A-Za-z0-9]{50,}/,
+    pattern: /(?:MISTRAL_API_KEY|mistral[_-]api[_-]key)[\s]*[=:][\s]*([A-Za-z0-9]{50,})/,
+    secretGroup: 1,
     entropy: false,
     severity: 'high',
     provider: 'Mistral',
@@ -867,7 +888,8 @@ const RULES = [
   {
     id: 'cohere-api-key',
     name: 'Cohere API Key',
-    pattern: /(?:COHERE_API_KEY|CO_API_KEY|cohere[_-]api[_-]key)[\s]*[=:][\s]*[A-Za-z0-9]{50,}/,
+    pattern: /(?:COHERE_API_KEY|CO_API_KEY|cohere[_-]api[_-]key)[\s]*[=:][\s]*([A-Za-z0-9]{50,})/,
+    secretGroup: 1,
     entropy: false,
     severity: 'high',
     provider: 'Cohere',

@@ -85,10 +85,14 @@ function formatFinding(finding, fileLines, options) {
   if (fileLines && fileLines.length > 0) {
     // Redact secret in the finding line before rendering code context
     let displayLines = fileLines;
-    if (finding.match && finding.lineNumber >= 1 && finding.lineNumber <= fileLines.length) {
+    const secretValue = finding.secret ?? finding.match;
+    if (secretValue && finding.lineNumber >= 1 && finding.lineNumber <= fileLines.length) {
       displayLines = [...fileLines];
       const lineIdx = finding.lineNumber - 1;
-      displayLines[lineIdx] = displayLines[lineIdx].replace(finding.match, redactSecret(finding.match));
+      // Redact, then truncate long values (e.g. full entropy strings) for display
+      let redacted = redactSecret(secretValue);
+      if (redacted.length > 50) redacted = redacted.slice(0, 47) + '...';
+      displayLines[lineIdx] = displayLines[lineIdx].replace(secretValue, redacted);
     }
     parts.push(formatCodeContext(displayLines, finding.lineNumber, contextLines, useColor));
     if (finding.matchStart !== undefined) {

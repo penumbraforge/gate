@@ -258,6 +258,7 @@ function scanForPatterns(content, lineNum, options = {}) {
         type: 'pattern',
         lineNumber: lineNum,
         match: match[0],
+        secret: match[1] ?? match[0],
         matchStart: match.index,
         matchLength: match[0].length,
       });
@@ -280,6 +281,7 @@ function scanForPatterns(content, lineNum, options = {}) {
         type: 'pattern',
         lineNumber: lineNum,
         match: match[0],
+        secret: match[1] ?? match[0],
         matchStart: match.index,
         matchLength: match[0].length,
       });
@@ -303,7 +305,8 @@ function scanForPatterns(content, lineNum, options = {}) {
           severity: entropyRule.severity,
           type: 'entropy',
           lineNumber: lineNum,
-          match: str.substring(0, 50) + (str.length > 50 ? '...' : ''),
+          match: str,
+          secret: str,
           entropy: entropy.toFixed(2),
           matchStart: match.index,
           matchLength: match[0].length,
@@ -340,7 +343,8 @@ function extractMultilineStrings(content, options = {}) {
     for (const rule of rules) {
       if (!rule.pattern) continue;
       const re = new RegExp(rule.pattern.source, 'g');
-      if (re.test(joined)) {
+      const match = re.exec(joined);
+      if (match !== null) {
         findings.push({
           ruleId: rule.id,
           ruleName: rule.name,
@@ -348,6 +352,7 @@ function extractMultilineStrings(content, options = {}) {
           type: 'multiline-pattern',
           lineNumber: startLine + 1,
           match: joined.substring(0, 50) + (joined.length > 50 ? '...' : ''),
+          secret: match[1] ?? match[0],
           multiline: true,
         });
         return; // One match per candidate is enough
@@ -364,6 +369,7 @@ function extractMultilineStrings(content, options = {}) {
           type: 'multiline-entropy',
           lineNumber: startLine + 1,
           match: joined.substring(0, 50) + '...',
+          secret: joined,
           entropy: calculateEntropy(joined).toFixed(2),
           multiline: true,
         });

@@ -273,7 +273,7 @@ function generateAuditGuidance(ruleId, exposureWindow = {}) {
  * @returns {string} the script contents
  */
 function generatePurgeScript(finding, repoDir) {
-  const secretValue = finding.match;
+  const secretValue = finding.secret || finding.match;
   const date = new Date().toISOString().slice(0, 10);
   const scriptPath = path.join(repoDir, '.gate', `purge-${date}.sh`);
   const replacementsPath = path.join(repoDir, '.gate', `replacements-${date}.txt`);

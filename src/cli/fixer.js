@@ -551,7 +551,7 @@ function pruneSnapshots(snapshotDir) {
 function fixFinding(finding, filePath, options = {}) {
   const { repoDir, dryRun = false } = options;
   const language = detectLanguage(filePath);
-  const secretValue = finding.match;
+  const secretValue = finding.secret || finding.match;
 
   // Derive env var name
   const fileContent = fs.readFileSync(filePath, 'utf8');

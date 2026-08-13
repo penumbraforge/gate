@@ -621,7 +621,8 @@ async function verifyFindings(findings, options = {}) {
 
   const promises = findings.map(async (finding) => {
     // Check cache first
-    const cacheKey = `${finding.ruleId}:${hashCredential(finding.match)}`;
+    const credential = finding.secret || finding.match;
+    const cacheKey = `${finding.ruleId}:${hashCredential(credential)}`;
     const cached = cache[cacheKey];
     if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
       finding.verification = cached.result;
@@ -642,7 +643,7 @@ async function verifyFindings(findings, options = {}) {
     }
 
     try {
-      const result = await withTimeout(verifier(finding.match), PER_PROVIDER_TIMEOUT);
+      const result = await withTimeout(verifier(credential), PER_PROVIDER_TIMEOUT);
       finding.verification = result;
       cache[cacheKey] = { result, timestamp: Date.now() };
       adjustSeverity(finding);
