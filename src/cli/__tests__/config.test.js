@@ -18,7 +18,8 @@ describe('config', () => {
     const dir = createTempDir();
     const config = loadConfig(dir);
     expect(config.entropy_threshold).toBe(4.8);
-    expect(config.verify).toBe(true);
+    // Credential verification is opt-in (network calls to provider APIs)
+    expect(config.verify).toBe(false);
     expect(config.hooks).toEqual(['pre-commit']);
     expect(config.output.format).toBe('text');
     expect(config.output.color).toBe('auto');
@@ -32,7 +33,7 @@ describe('config', () => {
     const dir = createTempDir();
     fs.writeFileSync(path.join(dir, '.gaterc'), [
       'entropy_threshold: 4.2',
-      'verify: false',
+      'verify: true',
       'hooks:',
       '  - pre-commit',
       '  - pre-push',
@@ -41,7 +42,7 @@ describe('config', () => {
     ].join('\n'));
     const config = loadConfig(dir);
     expect(config.entropy_threshold).toBe(4.2);
-    expect(config.verify).toBe(false);
+    expect(config.verify).toBe(true);
     expect(config.hooks).toEqual(['pre-commit', 'pre-push']);
     expect(config.severity['sentry-dsn']).toBe('ignore');
     expect(config.output.format).toBe('text');

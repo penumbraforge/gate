@@ -80,9 +80,9 @@ function httpRequest(url, options = {}) {
 function withTimeout(promise, ms) {
   let timer;
   return Promise.race([
-    promise.then(r => { clearTimeout(timer); return r; }),
-    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('timeout')), ms); })
-  ]);
+    promise,
+    new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('timeout')), ms); }),
+  ]).finally(() => clearTimeout(timer));
 }
 
 // ── Cache ────────────────────────────────────────────────────────────────────

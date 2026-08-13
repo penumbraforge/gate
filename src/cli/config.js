@@ -32,7 +32,8 @@ function parseFileSize(value) {
 
 const DEFAULTS = {
   entropy_threshold: 4.8,
-  verify: true,
+  // Credential verification calls provider APIs over the network — opt-in.
+  verify: false,
   hooks: ['pre-commit'],
   severity: {},
   rules: [],

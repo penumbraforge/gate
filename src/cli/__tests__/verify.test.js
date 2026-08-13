@@ -332,3 +332,40 @@ describe('VERIFIERS mapping', () => {
     }
   });
 });
+
+describe('withTimeout timer hygiene', () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  test('clears its timer when the wrapped promise rejects', async () => {
+    jest.useFakeTimers();
+    const { withTimeout } = require('../verify');
+
+    const failing = Promise.reject(new Error('boom'));
+    await expect(withTimeout(failing, 5000)).rejects.toThrow('boom');
+
+    // The timeout timer must have been cleaned up on rejection
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  test('clears its timer when the wrapped promise resolves', async () => {
+    jest.useFakeTimers();
+    const { withTimeout } = require('../verify');
+
+    await expect(withTimeout(Promise.resolve('ok'), 5000)).resolves.toBe('ok');
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  test('still rejects with timeout when the promise never settles', async () => {
+    jest.useFakeTimers();
+    const { withTimeout } = require('../verify');
+
+    const never = new Promise(() => {});
+    const raced = withTimeout(never, 1000);
+    const assertion = expect(raced).rejects.toThrow('timeout');
+    jest.advanceTimersByTime(1001);
+    await assertion;
+    expect(jest.getTimerCount()).toBe(0);
+  });
+});
