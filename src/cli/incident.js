@@ -543,17 +543,6 @@ ${rec.compliance.soc2.map(r => `- ${r}`).join('\n')}
   return report;
 }
 
-// ─── Step 3: CLEAN CODE (wrapper) ────────────────────────────────────────────
-
-/**
- * Placeholder for Step 3 — callers should use fixer.fixFinding directly.
- * Exposed here for consistency with the workflow API.
- */
-function cleanCode(finding, filePath, options = {}) {
-  const fixer = require('./fixer');
-  return fixer.fixFinding(finding, filePath, options);
-}
-
 // ─── Interactive workflow ─────────────────────────────────────────────────────
 
 /**

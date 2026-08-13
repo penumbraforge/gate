@@ -7,7 +7,6 @@ const {
   generateHTMLReport,
   generateSARIF,
   generateJSONReport,
-  generateIncidentReport,
 } = require('../reporter');
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
@@ -122,30 +121,6 @@ function makeAuditData(overrides = {}) {
       },
     ],
     ...overrides,
-  };
-}
-
-function makeIncidentRecord() {
-  return {
-    id: 'gate-inc-20260321-001',
-    dateDetected: '2026-03-21T08:30:00.000Z',
-    severity: 'Critical',
-    summary: 'AWS access key exposed in source repository.',
-    timeline: [
-      { time: '2026-03-21T08:30:00.000Z', event: 'Secret detected by Gate scanner' },
-      { time: '2026-03-21T08:45:00.000Z', event: 'Credential verified as live via API' },
-      { time: '2026-03-21T09:00:00.000Z', event: 'Key rotated in AWS IAM console' },
-    ],
-    actionsTaken: [
-      { description: 'Credential rotated', done: true },
-      { description: 'Access logs reviewed', done: true },
-      { description: 'Git history scrubbed', done: false },
-    ],
-    complianceRefs: ['OWASP A02:2021', 'NIST SC-12'],
-    recommendations: [
-      'Enable AWS CloudTrail for all API calls',
-      'Adopt IAM roles instead of long-lived access keys',
-    ],
   };
 }
 
@@ -335,31 +310,6 @@ describe('generateJSONReport', () => {
 
     expect(report.findings[0].verification).toBe('inactive');
     expect(report.summary.verified.inactive).toBe(2);
-  });
-});
-
-describe('generateIncidentReport', () => {
-  test('Incident report has required header fields', () => {
-    const report = generateIncidentReport(makeIncidentRecord());
-    expect(report).toContain('# Security Incident Report');
-    expect(report).toContain('gate-inc-20260321-001');
-    expect(report).toContain('Critical');
-  });
-
-  test('Incident report has timeline table', () => {
-    const report = generateIncidentReport(makeIncidentRecord());
-    expect(report).toContain('## Timeline');
-    expect(report).toContain('| Time |');
-    expect(report).toContain('| Event |');
-    // Should contain timeline events
-    expect(report).toContain('Secret detected by Gate scanner');
-  });
-
-  test('Incident report has actions taken section', () => {
-    const report = generateIncidentReport(makeIncidentRecord());
-    expect(report).toContain('## Actions Taken');
-    expect(report).toContain('Credential rotated');
-    expect(report).toContain('Git history scrubbed');
   });
 });
 

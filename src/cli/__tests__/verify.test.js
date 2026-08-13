@@ -333,6 +333,41 @@ describe('VERIFIERS mapping', () => {
   });
 });
 
+describe('verifySupabase', () => {
+  function makeSupabaseKey(payload) {
+    const b64 = (obj) => Buffer.from(JSON.stringify(obj)).toString('base64url');
+    return `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64(payload)}.fakesignature`;
+  }
+
+  test('uses the project ref from the JWT payload to verify the key', async () => {
+    https.request.mockImplementation(mockHttpResponse(200, '{}'));
+
+    const token = makeSupabaseKey({ iss: 'supabase', ref: 'abcdefghijkl', role: 'anon' });
+    const result = await VERIFIERS['supabase-key'](token);
+
+    expect(result.status).toBe('live');
+    // The request went to the project's REST endpoint with the key attached
+    const options = https.request.mock.calls[0][0];
+    expect(options.hostname || options.host).toContain('abcdefghijkl.supabase.co');
+    expect(options.headers.apikey).toBe(token);
+  });
+
+  test('401 from the project endpoint reports inactive', async () => {
+    https.request.mockImplementation(mockHttpResponse(401, '{}'));
+
+    const token = makeSupabaseKey({ iss: 'supabase', ref: 'abcdefghijkl', role: 'anon' });
+    const result = await VERIFIERS['supabase-key'](token);
+    expect(result.status).toBe('inactive');
+  });
+
+  test('returns unknown without a network call when the ref cannot be extracted', async () => {
+    const result = await VERIFIERS['supabase-key']('not-a-jwt-at-all');
+    expect(result.status).toBe('unknown');
+    expect(result.reason).toMatch(/project ref/i);
+    expect(https.request).not.toHaveBeenCalled();
+  });
+});
+
 describe('withTimeout timer hygiene', () => {
   afterEach(() => {
     jest.useRealTimers();

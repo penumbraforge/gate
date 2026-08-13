@@ -355,7 +355,9 @@ async function runInteractive(findings, options = {}) {
     } else if (action === 's' || action === null) {
       summary.skipped++;
       console.log(`  ${c(useColor, DIM, 'Skipped')}`);
-      actions.set(i, 's');
+      // Deliberately NOT recorded in `actions`: skipped findings must stay
+      // eligible for the batch-ignore prompt below (recording them made
+      // skippedCount always 0 and the prompt unreachable).
     }
 
     i++;
@@ -386,7 +388,7 @@ async function runInteractive(findings, options = {}) {
         }
       }
       summary.ignored += batchIgnored;
-      summary.skipped -= batchIgnored;
+      summary.skipped = Math.max(0, summary.skipped - batchIgnored);
       console.log(`  ${c(useColor, GREEN, '\u2713')} Added ${batchIgnored} entries to .gateignore`);
     }
   }

@@ -64,8 +64,8 @@ function getUpdateCommand(method) {
       };
     case 'git-clone':
       return {
-        cmd: 'git pull && npm install && npm run build',
-        desc: 'Pull latest and rebuild',
+        cmd: 'git pull && npm install',
+        desc: 'Pull latest and reinstall dependencies',
       };
     default:
       return {
@@ -225,19 +225,6 @@ async function runUpdate(currentVersion) {
       return false;
     }
 
-    // Build
-    console.log('');
-    console.log('Building...');
-    const build = spawnSync('npm', ['run', 'build'], {
-      cwd: rootDir,
-      stdio: 'inherit',
-      shell: process.platform === 'win32',
-    });
-    if (build.status !== 0) {
-      console.log('Build failed.');
-      return false;
-    }
-
     console.log('');
     console.log(`Updated to v${latest}`);
     return true;
@@ -256,7 +243,7 @@ async function runUpdate(currentVersion) {
       console.log('');
       console.log('Or install from source:');
       console.log(`  git clone https://github.com/${GITHUB_REPO}.git`);
-      console.log('  cd gate && npm install && npm run build');
+      console.log('  cd gate && npm install');
       return false;
     }
 
@@ -273,7 +260,7 @@ async function runUpdate(currentVersion) {
   console.log('');
   console.log('  Option 2 — git:');
   console.log(`    git clone https://github.com/${GITHUB_REPO}.git`);
-  console.log('    cd gate && npm install && npm run build');
+  console.log('    cd gate && npm install');
   return false;
 }
 

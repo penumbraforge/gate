@@ -73,14 +73,18 @@ info "Tagging v${NEW_VERSION}..."
 git tag -a "v${NEW_VERSION}" -m "Gate v${NEW_VERSION}"
 
 # 5. Push
-info "Pushing to origin..."
-git push origin main
-git push origin "v${NEW_VERSION}"
+REMOTE="${GATE_REMOTE:-$(git remote | head -1)}"
+if [ -z "$REMOTE" ]; then
+  error "No git remote configured. Set GATE_REMOTE or add a remote."
+fi
+info "Pushing to ${REMOTE}..."
+git push "$REMOTE" main
+git push "$REMOTE" "v${NEW_VERSION}"
 
 echo ""
 echo -e "${GREEN}${BOLD}Release v${NEW_VERSION} complete!${RESET}"
 echo ""
-echo "  Git: pushed to origin/main with tag v${NEW_VERSION}"
+echo "  Git: pushed to ${REMOTE}/main with tag v${NEW_VERSION}"
 echo "  npm: run 'npm publish' to publish to npm registry"
 echo ""
 echo "Users will be notified on next CLI run via 'gate update'."

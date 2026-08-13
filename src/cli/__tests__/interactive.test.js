@@ -51,6 +51,24 @@ function makeMockStdin() {
   return emitter;
 }
 
+// Feed keys to successive prompts: each key is emitted only once a prompt is
+// actively listening, so every key lands on its own prompt in order.
+// (Skipped findings now trigger the batch-ignore prompt, which needs an
+// answer too — usually a trailing 'l' for "leave as-is".)
+function pressKeys(stdin, keys) {
+  const queue = [...keys];
+  const timer = setInterval(() => {
+    if (queue.length === 0) {
+      clearInterval(timer);
+      return;
+    }
+    if (stdin.listenerCount('data') > 0) {
+      stdin.emit('data', queue.shift());
+    }
+  }, 1);
+  return timer;
+}
+
 // ─── Setup / Teardown ────────────────────────────────────────────────────────
 
 let mockStdin;
@@ -146,8 +164,8 @@ test('4. runInteractive with LOCAL finding shows correct options', async () => {
   const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
   const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
 
-  // Skip the finding.
-  setImmediate(() => mockStdin.emit('data', 's'));
+  // Skip the finding, then answer the batch prompt with "leave as-is".
+  pressKeys(mockStdin, ['s', 'l']);
 
   const findings = [makeFinding()];
   await runInteractive(findings, { color: false, repoDir: '/fake/project' });
@@ -182,7 +200,7 @@ test('5. runInteractive with PUSHED finding shows respond/fix/skip/explain (no v
   const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
   const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
 
-  setImmediate(() => mockStdin.emit('data', 's'));
+  pressKeys(mockStdin, ['s', 'l']);
 
   const findings = [makeFinding()];
   await runInteractive(findings, { color: false, repoDir: '/fake/project' });
@@ -201,7 +219,9 @@ test('5. runInteractive with PUSHED finding shows respond/fix/skip/explain (no v
   // Check that [v] does not show as an option (vault).
   // We check the options block specifically rather than all output.
   expect(allOutput).not.toMatch(/\[v\].*Vault/i);
-  expect(allOutput).not.toMatch(/\[i\].*Ignore/i);
+  // The per-finding Ignore option must not appear (the batch prompt's
+  // "[i] Ignore all skipped" is a different, legitimate prompt).
+  expect(allOutput).not.toMatch(/Add to \.gateignore/i);
 
   writeSpy.mockRestore();
   logSpy.mockRestore();
@@ -272,10 +292,7 @@ test('8. runInteractive skip moves to next finding without acting', async () => 
   jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
   jest.spyOn(console, 'log').mockImplementation(() => {});
 
-  setImmediate(() => {
-    mockStdin.emit('data', 's');
-    setImmediate(() => mockStdin.emit('data', 's'));
-  });
+  pressKeys(mockStdin, ['s', 's', 'l']);
 
   const findings = [makeFinding(), makeFinding({ file: '/fake/project/other.js' })];
   await runInteractive(findings, { color: false, repoDir: '/fake/project' });
@@ -294,11 +311,8 @@ test('9. runInteractive explain shows remediation guide', async () => {
   const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
   const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
 
-  // '?' to explain, then 's' to skip.
-  setImmediate(() => {
-    mockStdin.emit('data', '?');
-    setImmediate(() => mockStdin.emit('data', 's'));
-  });
+  // '?' to explain, then 's' to skip, then 'l' at the batch prompt.
+  pressKeys(mockStdin, ['?', 's', 'l']);
 
   const findings = [makeFinding()];
   await runInteractive(findings, { color: false, repoDir: '/fake/project' });
@@ -328,14 +342,8 @@ test('10. Multiple findings walks through each one', async () => {
     makeFinding({ file: '/fake/project/c.js', ruleId: 'openai-api-key', ruleName: 'OpenAI API Key' }),
   ];
 
-  // 'f' for first, 's' for second, 's' for third.
-  setImmediate(() => {
-    mockStdin.emit('data', 'f');
-    setImmediate(() => {
-      mockStdin.emit('data', 's');
-      setImmediate(() => mockStdin.emit('data', 's'));
-    });
-  });
+  // 'f' for first, 's' for second, 's' for third, 'l' at the batch prompt.
+  pressKeys(mockStdin, ['f', 's', 's', 'l']);
 
   await runInteractive(findings, { color: false, repoDir: '/fake/project' });
 
@@ -391,17 +399,9 @@ describe('interactive navigation', () => {
       { ruleId: 'rule-b', ruleName: 'Rule B', severity: 'low', file: '/tmp/b.js', lineNumber: 2 },
     ];
 
-    // Skip first, then press 'p' to go back, then skip first again, then skip second.
-    setImmediate(() => {
-      mockStdin.emit('data', 's');
-      setImmediate(() => {
-        mockStdin.emit('data', 'p');
-        setImmediate(() => {
-          mockStdin.emit('data', 's');
-          setImmediate(() => mockStdin.emit('data', 's'));
-        });
-      });
-    });
+    // Skip first, then press 'p' to go back, then skip first again, then
+    // skip second, then 'l' at the batch prompt.
+    pressKeys(mockStdin, ['s', 'p', 's', 's', 'l']);
 
     const result = await runInteractive(findings, { color: false, repoDir: '/tmp' });
 
@@ -424,11 +424,8 @@ describe('interactive navigation', () => {
       { ruleId: 'rule-a', ruleName: 'Rule A', severity: 'low', file: '/tmp/a.js', lineNumber: 1 },
     ];
 
-    // Press 'p' at first finding (no-op), then skip.
-    setImmediate(() => {
-      mockStdin.emit('data', 'p');
-      setImmediate(() => mockStdin.emit('data', 's'));
-    });
+    // Press 'p' at first finding (no-op), then skip, then leave as-is.
+    pressKeys(mockStdin, ['p', 's', 'l']);
 
     const result = await runInteractive(findings, { color: false, repoDir: '/tmp' });
     expect(result.summary.skipped).toBe(1);
@@ -443,7 +440,7 @@ describe('interactive navigation', () => {
     const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
 
-    setImmediate(() => mockStdin.emit('data', 's'));
+    pressKeys(mockStdin, ['s', 'l']);
 
     const findings = [{ ruleId: 'rule-a', ruleName: 'Rule A', severity: 'low', file: '/tmp/a.js', lineNumber: 1 }];
     await runInteractive(findings, { color: false, repoDir: '/tmp' });
@@ -459,5 +456,65 @@ describe('interactive navigation', () => {
 
     writeSpy.mockRestore();
     logSpy.mockRestore();
+  });
+});
+
+// ─── Batch-ignore prompt for skipped findings ─────────────────────────────────
+
+describe('batch-ignore for skipped findings', () => {
+  test('skipping findings reaches the batch prompt; [i] adds them to .gateignore', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-interactive-batch-'));
+    const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const { runInteractive } = require('../interactive');
+
+      const findings = [
+        makeFinding({ file: path.join(tmpDir, 'a.js') }),
+        makeFinding({ file: path.join(tmpDir, 'b.js'), ruleId: 'github-pat' }),
+      ];
+
+      // Skip both findings, then choose [i] Ignore all skipped.
+      pressKeys(mockStdin, ['s', 's', 'i']);
+
+      const result = await runInteractive(findings, { color: false, repoDir: tmpDir });
+
+      expect(result.summary.ignored).toBe(2);
+      expect(result.summary.skipped).toBe(0);
+
+      const gateignore = fs.readFileSync(path.join(tmpDir, '.gateignore'), 'utf8');
+      expect(gateignore).toContain('[rule:stripe-live-secret] a.js');
+      expect(gateignore).toContain('[rule:github-pat] b.js');
+
+      const allOutput = [...writeSpy.mock.calls, ...logSpy.mock.calls]
+        .map(args => args.join(' '))
+        .join('\n');
+      expect(allOutput).toMatch(/2 finding\(s\) were skipped/);
+    } finally {
+      writeSpy.mockRestore();
+      logSpy.mockRestore();
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
+
+  test('[l] leaves skipped findings as-is', async () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-interactive-batch-'));
+    const writeSpy = jest.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const { runInteractive } = require('../interactive');
+      const findings = [makeFinding({ file: path.join(tmpDir, 'a.js') })];
+
+      pressKeys(mockStdin, ['s', 'l']);
+      const result = await runInteractive(findings, { color: false, repoDir: tmpDir });
+
+      expect(result.summary.skipped).toBe(1);
+      expect(result.summary.ignored).toBe(0);
+      expect(fs.existsSync(path.join(tmpDir, '.gateignore'))).toBe(false);
+    } finally {
+      writeSpy.mockRestore();
+      logSpy.mockRestore();
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
   });
 });

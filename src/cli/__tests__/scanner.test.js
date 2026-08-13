@@ -115,51 +115,36 @@ describe('scanner config/ignore integration', () => {
   test('uses per-file-type entropy thresholds — .env has lower threshold', () => {
     const dir = createTempDir();
     try {
-      // Generate a string with entropy around 3.9 — above 3.8 (.env threshold)
-      // but below 4.0 (source code threshold)
-      // Use a deterministic string that has entropy ~3.9
-      const medEntropy = 'aB1cD2eF3gH4iJ5kL6mN7';
+      // Generate a string with entropy around 4.7 — above 4.5 (.env/config
+      // threshold) but below 4.8 (source code threshold).
+      // 26 distinct characters => entropy = log2(26) ≈ 4.70
+      const medEntropy = 'aB1cD2eF3gH4iJ5kL6mN7oP8qR';
 
       // Verify the entropy is in the right range
       const ent = scanner.calculateEntropy(medEntropy);
+      expect(ent).toBeGreaterThanOrEqual(4.5);
+      expect(ent).toBeLessThan(4.8);
 
       // Create .env file and .js file with same content
       const envFile = path.join(dir, '.env');
       const jsFile = path.join(dir, 'app.js');
 
-      fs.writeFileSync(envFile, `SECRET="${medEntropy}"\n`);
+      fs.writeFileSync(envFile, `SOME_VALUE="${medEntropy}"\n`);
       fs.writeFileSync(jsFile, `const s = "${medEntropy}";\n`);
 
-      // Only test if entropy is in the right range (3.8 <= ent < 4.0)
-      if (ent >= 3.8 && ent < 4.0) {
-        const envResults = scanner.scanFile(envFile, { configDir: dir });
-        const jsResults = scanner.scanFile(jsFile, { configDir: dir });
+      const envResults = scanner.scanFile(envFile, { configDir: dir });
+      const jsResults = scanner.scanFile(jsFile, { configDir: dir });
 
-        const envEntropyFindings = envResults.findings.filter(
-          f => f.type === 'entropy'
-        );
-        const jsEntropyFindings = jsResults.findings.filter(
-          f => f.type === 'entropy'
-        );
+      const envEntropyFindings = envResults.findings.filter(
+        f => f.type === 'entropy'
+      );
+      const jsEntropyFindings = jsResults.findings.filter(
+        f => f.type === 'entropy'
+      );
 
-        // Should be flagged in .env (threshold 3.8) but not in .js (threshold 4.8)
-        expect(envEntropyFindings.length).toBeGreaterThanOrEqual(1);
-        expect(jsEntropyFindings).toHaveLength(0);
-      } else {
-        // If our test string doesn't land in the right range, just verify
-        // the thresholds are being applied differently
-        const envResults = scanner.scanFile(envFile, {
-          configDir: dir,
-          entropyThreshold: 3.8,
-        });
-        const jsResults = scanner.scanFile(jsFile, {
-          configDir: dir,
-          entropyThreshold: 4.0,
-        });
-        // At least verify they ran without error
-        expect(envResults.error).toBeNull();
-        expect(jsResults.error).toBeNull();
-      }
+      // Should be flagged in .env (threshold 4.5) but not in .js (threshold 4.8)
+      expect(envEntropyFindings.length).toBeGreaterThanOrEqual(1);
+      expect(jsEntropyFindings).toHaveLength(0);
     } finally {
       cleanDir(dir);
     }
@@ -462,5 +447,63 @@ describe('multiline secret detection', () => {
     const result = scanContent(content);
     // Should detect as multiline entropy (base64 block after assignment context)
     expect(result.findings.some(f => f.multiline === true)).toBe(true);
+  });
+});
+
+describe('entropy false-positive guards', () => {
+  let scanner;
+
+  beforeEach(() => {
+    jest.resetModules();
+    scanner = require('../scanner');
+  });
+
+  test('JSON with UUIDs, file paths, and prose produces 0 findings', () => {
+    const dir = createTempDir();
+    try {
+      const filePath = path.join(dir, 'fixture.json');
+      const content = JSON.stringify({
+        requestId: '9f8b7c6d-1a2b-3c4d-5e6f-7a8b9c0d1e2f',
+        correlationId: 'DEADBEEF-CAFE-4B1D-8000-0123456789AB',
+        binaryPath: '/usr/local/lib/node_modules/@penumbraforge/gate/bin/gate.js',
+        cachePath: '/Users/someone/Library/Caches/gate/update-check.json',
+        description: 'A perfectly ordinary English sentence describing the config.',
+        note: 'ThisValueMixesCaseButIsJustWordsGluedTogetherNicely',
+      }, null, 2);
+      fs.writeFileSync(filePath, content);
+
+      const results = scanner.scanFile(filePath, { configDir: dir });
+      expect(results.findings).toHaveLength(0);
+    } finally {
+      cleanDir(dir);
+    }
+  });
+
+  test('.env with a real 40-char base64-ish secret is still detected', () => {
+    const dir = createTempDir();
+    try {
+      // High-entropy 40-char mixed-case+digits value (entropy > 4.5)
+      const secret = 'tr8xPqm2VbLw9ZkYd3RfCnJ0hG5sQxTe4uHiOp1A';
+      const ent = scanner.calculateEntropy(secret);
+      expect(ent).toBeGreaterThanOrEqual(4.5);
+
+      const filePath = path.join(dir, '.env');
+      // Variable name chosen so only the entropy rule (not env-var-secret) fires
+      fs.writeFileSync(filePath, `DB_CONN="${secret}"\n`);
+
+      const results = scanner.scanFile(filePath, { configDir: dir });
+      const entropyFindings = results.findings.filter(f => f.type === 'entropy');
+      expect(entropyFindings.length).toBeGreaterThanOrEqual(1);
+      expect(entropyFindings[0].secret).toBe(secret);
+    } finally {
+      cleanDir(dir);
+    }
+  });
+
+  test('shouldScanForEntropy skips UUIDs and path-like strings', () => {
+    expect(scanner.shouldScanForEntropy('9f8b7c6d-1a2b-3c4d-5e6f-7a8b9c0d1e2f')).toBe(false);
+    expect(scanner.shouldScanForEntropy('lib/node_modules/some-package/dist/index.js')).toBe(false);
+    // Path-like but with a long random segment — still scannable
+    expect(scanner.shouldScanForEntropy('api/v1/tr8xPqm2VbLw9ZkYd3RfCnJ0hG5sQxTe4uHiOp1A')).toBe(true);
   });
 });

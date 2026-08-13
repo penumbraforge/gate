@@ -620,91 +620,6 @@ function generateJSONReport(scanResults, options = {}) {
   };
 }
 
-// ── generateIncidentReport ────────────────────────────────────────────────────
-
-/**
- * Generate a Markdown incident report from an incident record.
- *
- * @param {object} incidentRecord
- * @returns {string} Markdown report
- */
-function generateIncidentReport(incidentRecord) {
-  const rec = incidentRecord || {};
-  const lines = [];
-
-  lines.push('# Security Incident Report');
-  lines.push('');
-  lines.push(`**Incident ID:** ${rec.id || 'N/A'}`);
-  lines.push(`**Date Detected:** ${formatDate(rec.dateDetected)}`);
-  lines.push(`**Severity:** ${rec.severity || 'Unknown'}`);
-  lines.push('');
-
-  // Summary
-  lines.push('## Summary');
-  lines.push('');
-  lines.push(rec.summary || '_No summary provided._');
-  lines.push('');
-
-  // Timeline
-  lines.push('## Timeline');
-  lines.push('');
-  lines.push('| Time | Event |');
-  lines.push('|------|-------|');
-  const timeline = rec.timeline || [];
-  if (timeline.length === 0) {
-    lines.push('| — | No timeline entries. |');
-  } else {
-    for (const entry of timeline) {
-      const time  = entry.time ? entry.time.replace('T', ' ').replace('.000Z', ' UTC') : '—';
-      const event = entry.event || '—';
-      lines.push(`| ${time} | ${event} |`);
-    }
-  }
-  lines.push('');
-
-  // Actions taken
-  lines.push('## Actions Taken');
-  lines.push('');
-  const actions = rec.actionsTaken || [];
-  if (actions.length === 0) {
-    lines.push('_No actions recorded._');
-  } else {
-    actions.forEach((action, i) => {
-      const check = action.done ? '✓' : '○';
-      lines.push(`${i + 1}. ${check} ${action.description || '—'}`);
-    });
-  }
-  lines.push('');
-
-  // Compliance References
-  lines.push('## Compliance References');
-  lines.push('');
-  const refs = rec.complianceRefs || [];
-  if (refs.length === 0) {
-    lines.push('_None specified._');
-  } else {
-    for (const ref of refs) {
-      lines.push(`- ${ref}`);
-    }
-  }
-  lines.push('');
-
-  // Recommendations
-  lines.push('## Recommendations');
-  lines.push('');
-  const recs = rec.recommendations || [];
-  if (recs.length === 0) {
-    lines.push('_None specified._');
-  } else {
-    recs.forEach((r, i) => {
-      lines.push(`${i + 1}. ${r}`);
-    });
-  }
-  lines.push('');
-
-  return lines.join('\n');
-}
-
 // ── Exports ───────────────────────────────────────────────────────────────────
 
 module.exports = {
@@ -712,5 +627,4 @@ module.exports = {
   generateHTMLReport,
   generateSARIF,
   generateJSONReport,
-  generateIncidentReport,
 };

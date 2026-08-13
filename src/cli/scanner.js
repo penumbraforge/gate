@@ -16,7 +16,7 @@ const { loadIgnorePatterns, shouldIgnoreFile, shouldIgnoreFinding, hasInlineIgno
  * Config files use lower thresholds (secrets more likely), minified files use higher
  */
 const FILE_TYPE_ENTROPY_THRESHOLDS = {
-  config: 3.8,   // .env, .yml, .yaml, .ini, .cfg, .conf, .toml, .properties
+  config: 4.5,   // .env, .yml, .yaml, .ini, .cfg, .conf, .toml, .properties
   source: 4.8,   // .js, .ts, .py, .go, .rb, .java, .rs, .c, .cpp, etc.
   minified: 5.0,  // .min.js, .min.css, .bundle.js
 };
@@ -185,8 +185,20 @@ function shouldScanForEntropy(str) {
   // Skip template literals with interpolation (error messages, UI text, etc.)
   if (str.includes('${')) return false;
 
+  // Skip UUID-shaped strings (8-4-4-4-12 hex) — identifiers, not secrets
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(str)) return false;
+
   // Skip strings that look like file paths or URLs (but not base64 with slashes)
   if (/^\/|:\/\//.test(str) && (str.match(/\//g) || []).length >= 2) return false;
+
+  // Skip path-like strings: multiple / segments where no segment looks like
+  // a long random run (16+ chars of base64-ish material containing digits)
+  if ((str.match(/\//g) || []).length >= 2) {
+    const hasLongRandomSegment = str.split('/').some(
+      (seg) => seg.length >= 16 && /\d/.test(seg) && /^[A-Za-z0-9+=._-]+$/.test(seg)
+    );
+    if (!hasLongRandomSegment) return false;
+  }
 
   // Skip strings with lots of spaces (comments, prose, etc.)
   const spaceRatio = (str.match(/ /g) || []).length / str.length;

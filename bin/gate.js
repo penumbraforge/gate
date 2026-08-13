@@ -440,41 +440,6 @@ function getFixScanResults(files, options, scanOptions) {
 }
 
 /**
- * Build SARIF output from scan results
- *
- * @param {object} results - Scan results from scanFiles/scanAll
- * @param {array} allFindings - Flattened findings array
- * @returns {object} SARIF report
- */
-function buildSarif(results, allFindings) {
-  return {
-    $schema: 'https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json',
-    version: '2.1.0',
-    runs: [{
-      tool: {
-        driver: {
-          name: 'gate',
-          version: VERSION,
-          informationUri: 'https://gate.penumbraforge.com',
-          rules: [],
-        },
-      },
-      results: allFindings.map(f => ({
-        ruleId: f.ruleId,
-        level: f.severity === 'critical' || f.severity === 'high' ? 'error' : 'warning',
-        message: { text: f.ruleName },
-        locations: [{
-          physicalLocation: {
-            artifactLocation: { uri: f.file },
-            region: { startLine: f.lineNumber },
-          },
-        }],
-      })),
-    }],
-  };
-}
-
-/**
  * Re-scan after remediation and exit with appropriate code.
  * If all findings are resolved, re-stage modified files (in pre-commit mode) and exit 0.
  */
@@ -1389,10 +1354,6 @@ async function main() {
         console.log('  Review the script before running it.');
         break;
       }
-
-      case 'serve':
-        console.log('Dashboard coming in Gate v2.2 (Phase 3)');
-        break;
 
       case 'help':
         printUsage();

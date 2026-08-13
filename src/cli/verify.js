@@ -408,18 +408,46 @@ async function verifyTwilio(token) {
 
 /**
  * Verify a Supabase key.
+ * Supabase API keys are JWTs whose payload carries the project ref, so the
+ * REST URL can be derived from the credential itself:
  * GET https://<project-ref>.supabase.co/rest/v1/ with apikey header.
- * Without a project ref, returns unknown.
  *
- * @param {string} token - The Supabase key
- * @returns {Promise<{status: string, details: object}>}
+ * @param {string} token - The Supabase key (JWT)
+ * @returns {Promise<{status: string, details?: object, reason?: string}>}
  */
 async function verifySupabase(token) {
-  // Supabase keys are JWTs; without knowing the project ref we cannot construct the URL
-  return {
-    status: 'unknown',
-    reason: 'Supabase verification requires project ref to construct API URL',
-  };
+  let projectRef = null;
+  try {
+    const payloadPart = String(token).split('.')[1] || '';
+    const payload = JSON.parse(Buffer.from(payloadPart, 'base64url').toString('utf8'));
+    if (payload && typeof payload.ref === 'string' && /^[a-z0-9-]{5,60}$/.test(payload.ref)) {
+      projectRef = payload.ref;
+    }
+  } catch {
+    // Not a decodable JWT — fall through to unknown
+  }
+
+  if (!projectRef) {
+    return {
+      status: 'unknown',
+      reason: 'Could not extract project ref from Supabase key payload',
+    };
+  }
+
+  const res = await httpRequest(`https://${projectRef}.supabase.co/rest/v1/`, {
+    headers: {
+      'apikey': token,
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+
+  if (res.statusCode === 200) {
+    return { status: 'live', details: {} };
+  }
+  if (res.statusCode === 401 || res.statusCode === 403) {
+    return { status: 'inactive', details: {} };
+  }
+  return { status: 'unknown', reason: `Unexpected status: ${res.statusCode}` };
 }
 
 /**
@@ -527,20 +555,6 @@ async function verifyLinear(token) {
     return { status: 'inactive', details: {} };
   }
   return { status: 'unknown', reason: `Unexpected status: ${res.statusCode}` };
-}
-
-/**
- * Generic verifier for unknown providers.
- * Returns unknown since we cannot determine the provider API.
- *
- * @param {string} credential - The credential value
- * @returns {Promise<{status: string, reason: string}>}
- */
-async function verifyGeneric(credential) {
-  return {
-    status: 'unknown',
-    reason: 'No verifier available for this credential type',
-  };
 }
 
 // ── Verifier Registry ────────────────────────────────────────────────────────
