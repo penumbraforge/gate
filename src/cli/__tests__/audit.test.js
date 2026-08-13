@@ -100,6 +100,39 @@ describe('recordScan', () => {
     expect(result).toBe(false);
     consoleSpy.mockRestore();
   });
+
+  test('rotates the audit log when it exceeds 5MB before appending', () => {
+    const { getAuditLogPath, MAX_AUDIT_LOG_BYTES } = require('../audit');
+    const logPath = getAuditLogPath();
+
+    fs.existsSync.mockReturnValue(true);
+    fs.statSync.mockReturnValue({ size: MAX_AUDIT_LOG_BYTES + 1 });
+    fs.readFileSync.mockReturnValue('');
+    fs.renameSync.mockImplementation(() => {});
+    fs.rmSync.mockImplementation(() => {});
+
+    recordScan({ commitHash: 'rotate-me' });
+
+    // Oldest generation dropped, .1 shifted to .2, current shifted to .1.
+    expect(fs.rmSync).toHaveBeenCalledWith(logPath + '.2', { force: true });
+    expect(fs.renameSync).toHaveBeenCalledWith(logPath + '.1', logPath + '.2');
+    expect(fs.renameSync).toHaveBeenCalledWith(logPath, logPath + '.1');
+    // The new entry is still appended to a fresh log.
+    expect(fs.appendFileSync).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not rotate the audit log below the size threshold', () => {
+    const { MAX_AUDIT_LOG_BYTES } = require('../audit');
+    fs.existsSync.mockReturnValue(true);
+    fs.statSync.mockReturnValue({ size: MAX_AUDIT_LOG_BYTES - 1 });
+    fs.readFileSync.mockReturnValue('');
+    fs.renameSync.mockImplementation(() => {});
+
+    recordScan({ commitHash: 'small' });
+
+    expect(fs.renameSync).not.toHaveBeenCalled();
+    expect(fs.appendFileSync).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('queryAuditLog', () => {

@@ -11,11 +11,38 @@ function getAuditLogPath() {
   return getGatePath('audit.jsonl');
 }
 
+// Rotate the audit log once it grows past this size. Two rotated generations
+// are kept (audit.jsonl.1 = newest, audit.jsonl.2 = older); older ones drop.
+const MAX_AUDIT_LOG_BYTES = 5 * 1024 * 1024; // 5MB
+
 /**
  * Ensure audit directory exists
  */
 function ensureAuditDir() {
   return ensureGateHome();
+}
+
+/**
+ * Rotate ~/.gate/audit.jsonl when it exceeds MAX_AUDIT_LOG_BYTES.
+ * Shifts audit.jsonl.1 → audit.jsonl.2 (dropping any older .2) and the current
+ * log → audit.jsonl.1, leaving a fresh empty log. Best-effort; never throws.
+ */
+function rotateAuditLogIfNeeded() {
+  const logPath = getAuditLogPath();
+  try {
+    if (!fs.existsSync(logPath)) return;
+    const { size } = fs.statSync(logPath);
+    if (size < MAX_AUDIT_LOG_BYTES) return;
+
+    const gen1 = logPath + '.1';
+    const gen2 = logPath + '.2';
+
+    if (fs.existsSync(gen2)) fs.rmSync(gen2, { force: true });
+    if (fs.existsSync(gen1)) fs.renameSync(gen1, gen2);
+    fs.renameSync(logPath, gen1);
+  } catch {
+    // Rotation is best-effort — never block a scan on it.
+  }
 }
 
 /**
@@ -68,6 +95,7 @@ function getPreviousHash() {
 function recordScan(entry) {
   try {
     ensureAuditDir();
+    rotateAuditLogIfNeeded();
 
     // Mask raw secret matches before writing to disk
     const maskedFindings = (entry.findings || []).map((f) => ({
@@ -440,4 +468,6 @@ module.exports = {
   getStatistics,
   clearAuditLog,
   ensureAuditDir,
+  rotateAuditLogIfNeeded,
+  MAX_AUDIT_LOG_BYTES,
 };
