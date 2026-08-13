@@ -29,6 +29,10 @@ inputs:
     description: 'GitHub token for PR comments'
     required: false
     default: ${{ github.token }}
+  use-local:
+    description: 'Run the checked-out repo''s own CLI (node bin/gate.js) instead of installing @penumbraforge/gate from npm. Used for self-testing unreleased versions.'
+    required: false
+    default: 'false'
 
 outputs:
   findings-count:
@@ -39,8 +43,8 @@ outputs:
     description: 'JSON scan report'
 
 runs:
-  using: 'node20'
-  main: 'action.js'
+  using: 'node24'
+  main: 'github-action/dist/index.js'
 
 branding:
   icon: 'shield'

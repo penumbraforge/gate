@@ -2,6 +2,7 @@ const core = require('@actions/core');
 const github = require('@actions/github');
 const { spawn, execSync } = require('child_process');
 const https = require('https');
+const path = require('path');
 
 /**
  * Gate GitHub Action v2 — runs Gate CLI and handles GitHub-specific integration.
@@ -10,6 +11,10 @@ const https = require('https');
 
 const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low'];
 const PACKAGE_NAME = '@penumbraforge/gate';
+
+// GitHub Actions caps a single step output at 1 MiB (the $GITHUB_OUTPUT file
+// entry). Keep the serialized scan-report safely under that.
+const MAX_OUTPUT_BYTES = 1000 * 1024;
 
 function severityRank(severity) {
   const rank = SEVERITY_ORDER.indexOf((severity || 'low').toLowerCase());
@@ -44,14 +49,46 @@ function ensureGateInstalled() {
 }
 
 /**
+ * Resolve the Gate command to invoke.
+ *
+ * When `useLocal` is true, run the checked-out repo's own CLI
+ * (`node <workspace>/bin/gate.js`) instead of installing the published npm
+ * package. This is what lets the action self-test a version that is not on npm
+ * yet. Returns either a string command or an [cmd, ...prefixArgs] array.
+ *
+ * @param {boolean} useLocal
+ * @returns {string|string[]}
+ */
+function resolveGateCommand(useLocal) {
+  if (useLocal) {
+    const workspace = process.env.GITHUB_WORKSPACE || process.cwd();
+    const localBin = path.join(workspace, 'bin', 'gate.js');
+    core.info(`Using local Gate CLI at ${localBin}`);
+    return [process.execPath, localBin];
+  }
+  return ensureGateInstalled();
+}
+
+/**
+ * Split a gateCmd (string or [cmd, ...prefixArgs]) into a spawn target.
+ */
+function toSpawn(gateCmd, subArgs) {
+  if (Array.isArray(gateCmd)) {
+    return { cmd: gateCmd[0], args: [...gateCmd.slice(1), ...subArgs] };
+  }
+  return { cmd: gateCmd, args: subArgs };
+}
+
+/**
  * Run a gate scan and return parsed JSON output.
  */
 function runGateScan(args, gateCmd = 'gate') {
   return new Promise((resolve, reject) => {
     const fullArgs = ['scan', '--all', '--format', 'json', ...args];
-    core.debug(`Running: ${gateCmd} ${fullArgs.join(' ')}`);
+    const { cmd, args: spawnArgs } = toSpawn(gateCmd, fullArgs);
+    core.debug(`Running: ${cmd} ${spawnArgs.join(' ')}`);
 
-    const proc = spawn(gateCmd, fullArgs, {
+    const proc = spawn(cmd, spawnArgs, {
       cwd: process.env.GITHUB_WORKSPACE || process.cwd(),
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -84,9 +121,10 @@ function runGateScan(args, gateCmd = 'gate') {
 function runGateScanSarif(args, gateCmd = 'gate') {
   return new Promise((resolve, reject) => {
     const fullArgs = ['scan', '--all', '--format', 'sarif', ...args];
-    core.debug(`Running: ${gateCmd} ${fullArgs.join(' ')}`);
+    const { cmd, args: spawnArgs } = toSpawn(gateCmd, fullArgs);
+    core.debug(`Running: ${cmd} ${spawnArgs.join(' ')}`);
 
-    const proc = spawn(gateCmd, fullArgs, {
+    const proc = spawn(cmd, spawnArgs, {
       cwd: process.env.GITHUB_WORKSPACE || process.cwd(),
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -240,6 +278,49 @@ function sendSlackNotification(findings, slackWebhook, context) {
   });
 }
 
+/**
+ * Serialize a scan report to JSON, capping the findings array so the result
+ * stays under the GitHub Actions per-output size limit. Adds `truncated` and
+ * `totalFindings` when capping occurs. The most severe findings are kept.
+ *
+ * @param {object} report
+ * @returns {string} JSON string guaranteed <= MAX_OUTPUT_BYTES
+ */
+function serializeScanReport(report) {
+  let json = JSON.stringify(report);
+  if (Buffer.byteLength(json, 'utf8') <= MAX_OUTPUT_BYTES) return json;
+
+  const findings = [...(report.findings || [])].sort(
+    (a, b) => severityRank(a.severity) - severityRank(b.severity)
+  );
+  const totalFindings = findings.length;
+
+  // Binary-search the largest prefix of findings that fits the budget.
+  let lo = 0;
+  let hi = totalFindings;
+  while (lo < hi) {
+    const mid = Math.ceil((lo + hi) / 2);
+    const candidate = {
+      ...report,
+      findings: findings.slice(0, mid),
+      truncated: true,
+      totalFindings,
+    };
+    if (Buffer.byteLength(JSON.stringify(candidate), 'utf8') <= MAX_OUTPUT_BYTES) {
+      lo = mid;
+    } else {
+      hi = mid - 1;
+    }
+  }
+
+  return JSON.stringify({
+    ...report,
+    findings: findings.slice(0, lo),
+    truncated: true,
+    totalFindings,
+  });
+}
+
 async function run() {
   try {
     const mode = core.getInput('mode') || 'report';
@@ -248,12 +329,13 @@ async function run() {
     const failOn = core.getInput('fail-on') || 'high';
     const slackWebhook = core.getInput('slack-webhook');
     const githubToken = core.getInput('github-token');
+    const useLocal = core.getInput('use-local') === 'true';
     const failureMode = resolveFailureMode(mode, core.getInput('failure-mode'));
 
     const context = github.context;
     const octokit = githubToken ? github.getOctokit(githubToken) : null;
 
-    const gateCmd = ensureGateInstalled();
+    const gateCmd = resolveGateCommand(useLocal);
 
     const scanArgs = [];
     if (verify) scanArgs.push('--verify');
@@ -279,7 +361,7 @@ async function run() {
 
     core.setOutput('findings-count', String(filteredFindings.length));
     core.setOutput('blocked', String(filteredFindings.length > 0 && failureMode === 'block'));
-    core.setOutput('scan-report', JSON.stringify(scanReport));
+    core.setOutput('scan-report', serializeScanReport(scanReport));
 
     if (scanErrorCount > 0) {
       const summary = `Gate scan incomplete: ${scanErrorCount} file(s) could not be scanned`;
@@ -340,11 +422,14 @@ module.exports = {
   meetsThreshold,
   resolveFailureMode,
   ensureGateInstalled,
+  resolveGateCommand,
+  toSpawn,
   runGateScan,
   runGateScanSarif,
   uploadSarif,
   postPRComment,
   sendSlackNotification,
+  serializeScanReport,
   run,
 };
 

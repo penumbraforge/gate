@@ -108,6 +108,51 @@ describe('github-action action.js', () => {
     );
   });
 
+  test('serializeScanReport keeps scan-report under the 1MB output limit', () => {
+    const findings = [];
+    for (let i = 0; i < 5000; i++) {
+      findings.push({
+        file: `src/module-${i}/config.js`,
+        line: i,
+        ruleId: 'aws-access-key-id',
+        ruleName: 'AWS Access Key ID',
+        severity: i % 3 === 0 ? 'critical' : 'high',
+        match: 'AKIA****',
+        secretHash: 'a'.repeat(64),
+      });
+    }
+    const report = {
+      findings,
+      errors: [],
+      skipped: [],
+      summary: { errors: 0 },
+      timestamp: '2026-08-12T00:00:00Z',
+    };
+
+    const serialized = action.serializeScanReport(report);
+    const bytes = Buffer.byteLength(serialized, 'utf8');
+    expect(bytes).toBeLessThan(1024 * 1024);
+
+    const parsed = JSON.parse(serialized);
+    expect(parsed.truncated).toBe(true);
+    expect(parsed.totalFindings).toBe(5000);
+    expect(parsed.findings.length).toBeLessThan(5000);
+    // Small reports pass through untouched.
+    const small = action.serializeScanReport({ findings: [findings[0]], summary: {} });
+    expect(JSON.parse(small).truncated).toBeUndefined();
+  });
+
+  test('resolveGateCommand returns a local node invocation when use-local is set', () => {
+    const cmd = action.resolveGateCommand(true);
+    expect(Array.isArray(cmd)).toBe(true);
+    expect(cmd[0]).toBe(process.execPath);
+    expect(cmd[1]).toMatch(/bin[\\/]gate\.js$/);
+    // toSpawn threads the prefix args ahead of the scan args.
+    const { cmd: spawnCmd, args } = action.toSpawn(cmd, ['scan', '--all']);
+    expect(spawnCmd).toBe(process.execPath);
+    expect(args).toEqual([cmd[1], 'scan', '--all']);
+  });
+
   test('sendSlackNotification includes ruleName in the payload', async () => {
     let capturedBody = '';
     const response = new EventEmitter();

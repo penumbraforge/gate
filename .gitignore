@@ -12,6 +12,9 @@ yarn.lock
 dist/
 build/
 .next/
+# ...but the committed GitHub Action bundle is required for `uses: penumbraforge/gate@v2`
+!github-action/dist/
+!github-action/dist/**
 
 # IDE
 .vscode/
