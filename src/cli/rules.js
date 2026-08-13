@@ -10,13 +10,16 @@ const crypto = require('crypto');
 /**
  * Verify the HMAC-SHA256 signature of rules/rules.json.
  *
+ * @param {string} [rulesPath] - path to the rules.json to verify (the .sig is
+ *   `${rulesPath}.sig`). Defaults to the bundled rules.json. Injectable so
+ *   tampered-file tests can point at a throwaway copy instead of mutating the
+ *   real shared file (which races concurrent test workers).
  * @returns {boolean} true when the signature is valid, or when no .sig file is
  *   present (dev clones load unsigned rules). false when a signature is present
  *   but does NOT match, or when verification cannot be performed.
  */
-function verifyRuleSignature() {
+function verifyRuleSignature(rulesPath = path.join(__dirname, '../../rules/rules.json')) {
   try {
-    const rulesPath = path.join(__dirname, '../../rules/rules.json');
     const sigPath = rulesPath + '.sig';
     // No signature file: treat as verifiable (caller decides whether to warn).
     if (!fs.existsSync(sigPath)) return true;

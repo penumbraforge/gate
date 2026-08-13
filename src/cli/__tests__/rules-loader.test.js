@@ -70,27 +70,42 @@ describe('rules-loader — live PII detection', () => {
 
 describe('rules-loader — tampered rules.json is rejected', () => {
   test('flipping a byte in rules.json (sig unchanged) skips the FORTRESS pack but keeps scanning', () => {
-    // Run in a throwaway copy of the repo so we never mutate the real rules.json.
-    const script = `
-      const fs = require('fs');
-      const path = require('path');
-      const rulesPath = path.join(${JSON.stringify(PROJECT_ROOT)}, 'rules', 'rules.json');
-      // Tamper: append a byte the signature won't cover.
-      const original = fs.readFileSync(rulesPath, 'utf8');
-      const backup = original;
-      fs.writeFileSync(rulesPath, original + ' ');
-      try {
-        const loader = require(path.join(${JSON.stringify(PROJECT_ROOT)}, 'src', 'cli', 'rules-loader.js'));
-        const { RULES } = require(path.join(${JSON.stringify(PROJECT_ROOT)}, 'src', 'cli', 'rules.js'));
-        const fortress = loader.loadFortressRules();
-        process.stdout.write(JSON.stringify({ fortress: fortress.length, builtins: RULES.length }));
-      } finally {
-        fs.writeFileSync(rulesPath, backup);
-      }
-    `;
-    const out = execFileSync(process.execPath, ['-e', script], { encoding: 'utf8' });
-    const parsed = JSON.parse(out);
-    expect(parsed.fortress).toBe(0);        // tampered pack skipped
-    expect(parsed.builtins).toBe(80);       // built-ins still available
+    // Copy the real rules.json + its .sig into a throwaway temp dir, tamper
+    // the COPY, and point the loader at it. This never touches the shared
+    // real rules.json — mutating that raced concurrent test workers and made
+    // this suite flaky.
+    const realRules = path.join(PROJECT_ROOT, 'rules', 'rules.json');
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-tamper-'));
+    const tamperedPath = path.join(tmp, 'rules.json');
+    try {
+      const original = fs.readFileSync(realRules, 'utf8');
+      // Tampered content the (copied, unchanged) signature won't cover.
+      fs.writeFileSync(tamperedPath, original + ' ');
+      fs.copyFileSync(realRules + '.sig', tamperedPath + '.sig');
+
+      const { computeFortressRules } = require('../rules-loader');
+      const fortress = computeFortressRules(tamperedPath);
+      expect(fortress.length).toBe(0);   // tampered pack skipped
+      expect(RULES.length).toBe(80);     // built-ins still available
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  test('a valid signed copy loads the FORTRESS pack', () => {
+    // Sanity counterpart: the same copy, UNtampered, verifies and loads.
+    const realRules = path.join(PROJECT_ROOT, 'rules', 'rules.json');
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-valid-'));
+    const copyPath = path.join(tmp, 'rules.json');
+    try {
+      fs.copyFileSync(realRules, copyPath);
+      fs.copyFileSync(realRules + '.sig', copyPath + '.sig');
+
+      const { computeFortressRules } = require('../rules-loader');
+      const fortress = computeFortressRules(copyPath);
+      expect(fortress.length).toBeGreaterThan(0);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
   });
 });

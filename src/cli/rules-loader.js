@@ -109,22 +109,28 @@ function loadFortressRules() {
   return _cache;
 }
 
-function computeFortressRules() {
+/**
+ * @param {string} [rulesPath] - override the rules.json path (its .sig is
+ *   `${rulesPath}.sig`). For tests: point at a throwaway copy so the tampered-
+ *   file case never mutates the real shared rules.json.
+ */
+function computeFortressRules(rulesPath = RULES_JSON_PATH) {
+  const sigPath = rulesPath + '.sig';
   // Lazy require to avoid a load-time cycle with rules.js.
   const { RULES, verifyRuleSignature } = require('./rules');
 
   let raw;
   try {
-    raw = fs.readFileSync(RULES_JSON_PATH, 'utf8');
+    raw = fs.readFileSync(rulesPath, 'utf8');
   } catch {
     // No rules.json at all — nothing to merge.
     return [];
   }
 
   // Signature gate.
-  if (!fs.existsSync(RULES_SIG_PATH)) {
+  if (!fs.existsSync(sigPath)) {
     console.error('gate: rules.json.sig not found — loading FORTRESS rules unsigned (dev mode).');
-  } else if (!verifyRuleSignature()) {
+  } else if (!verifyRuleSignature(rulesPath)) {
     console.error('gate: rules.json signature invalid — skipping FORTRESS rules. Run \'gate update\' to restore.');
     return [];
   }
@@ -205,6 +211,7 @@ module.exports = {
   loadFortressRules,
   _resetCache,
   // exported for unit testing
+  computeFortressRules,
   normalizePattern,
   hasCaptureGroup,
   deriveMeta,
