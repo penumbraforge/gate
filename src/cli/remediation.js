@@ -1,6 +1,6 @@
 /**
- * Remediation guidance for Gate scanner rules (CJS mirror of src/shared/remediation.ts)
- * Used by bin/gate.js which runs from source without tsc
+ * Remediation guidance for Gate scanner rules.
+ * Maps each rule ID to a recommended action, guidance, and reference link.
  */
 
 const REMEDIATION_MAP = {

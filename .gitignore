@@ -1,6 +1,5 @@
 # Dependencies
 node_modules/
-package-lock.json
 yarn.lock
 
 # Environment
@@ -31,6 +30,9 @@ Thumbs.db
 logs/
 *.log
 npm-debug.log*
+
+# Coverage
+coverage/
 
 # Private data
 .gate/

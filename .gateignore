@@ -35,6 +35,9 @@ CHANGELOG.md
 # .env.example — placeholder values, not real credentials
 .env.example
 
+# Lockfile — npm integrity hashes are high-entropy but not secrets
+package-lock.json
+
 # GitHub Action — example configs, action metadata, and token-handling code
 github-action/**
 

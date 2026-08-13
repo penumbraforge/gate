@@ -11,21 +11,71 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        node-version: [18, 20, 22]
+        node-version: [22, 24, 26]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: ${{ matrix.node-version }}
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Run tests
         run: npm test
 
       - name: Self-scan
         run: node bin/gate.js scan --all
+
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - run: npm ci
+      - name: Coverage (enforces thresholds)
+        run: npx jest --coverage
+
+  bundle-freshness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - run: npm ci
+      - name: Rebuild the action bundle
+        run: npm run build:action
+      - name: Fail if the committed bundle is stale
+        run: git diff --exit-code github-action/dist
+
+  docs-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - run: npm ci
+      - name: Fail if generated docs are out of date
+        run: node scripts/gen-docs.js --check
+
+  action-self-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      # bin/gate.js needs js-yaml at runtime; install before the local action run.
+      - run: npm ci
+      - name: Run the bundled action against this repo (unreleased CLI)
+        uses: ./
+        with:
+          mode: report
+          use-local: 'true'
