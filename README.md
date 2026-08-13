@@ -6,6 +6,8 @@
 
 Gate catches secrets before they're committed, verifies if they're live, and auto-fixes them across 9 languages. It generates compliance reports, incident documentation, and git history purge scripts — the remediation most scanners leave to you.
 
+![gate scan finds secrets, then fixes them into .env](demo/gate.gif)
+
 ## Quick Start
 
 ```bash

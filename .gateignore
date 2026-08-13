@@ -43,3 +43,6 @@ github-action/**
 
 # Release/build scripts
 scripts/**
+
+# Demo tapes contain intentional EXAMPLE secrets for the recorded GIF
+demo/**
