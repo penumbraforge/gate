@@ -7,6 +7,9 @@ on:
   push:
     tags:
       - 'v*'
+  # Manual re-run: after configuring the npm trusted publisher, run this from
+  # the Actions tab (or `gh workflow run release.yml`) without re-tagging.
+  workflow_dispatch:
 
 permissions:
   contents: read
