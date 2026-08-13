@@ -53,3 +53,5 @@ cookies.txt
 internal/
 .aider*
 .claude/
+demo/*.mp4
+demo/*.webm
