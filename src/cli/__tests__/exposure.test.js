@@ -235,3 +235,94 @@ describe('formatExposure', () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Content-level (pickaxe) exposure assessment
+// ---------------------------------------------------------------------------
+
+describe('content-level exposure (git pickaxe)', () => {
+  test('secret in a past commit but not HEAD uses the content-level branch', async () => {
+    const dir = createTempDir();
+    try {
+      gitInit(dir);
+      const secret = 'AKIAIOSFODNN7EXAMPLE';
+      const filePath = path.join(dir, 'config.js');
+
+      // Commit the secret, then remove it in a later commit — a file-level
+      // check would still be COMMITTED/medium, but only the pickaxe can say
+      // the secret content itself is in history with high confidence.
+      fs.writeFileSync(filePath, `const key = "${secret}";\n`);
+      execSync('git add config.js', { cwd: dir, stdio: 'ignore' });
+      execSync('git commit -m "add secret"', { cwd: dir, stdio: 'ignore' });
+      fs.writeFileSync(filePath, 'const key = process.env.AWS_ACCESS_KEY_ID;\n');
+      execSync('git add config.js', { cwd: dir, stdio: 'ignore' });
+      execSync('git commit -m "remove secret"', { cwd: dir, stdio: 'ignore' });
+
+      const result = await assessExposure(filePath, dir, secret);
+
+      // Distinguishing fields of the content-level branch
+      expect(result.level).toBe('COMMITTED');
+      expect(result.confidence).toBe('high');
+      expect(result.details).toMatch(/Secret content found in local commit history/);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('secret never committed yields content-level LOCAL/high', async () => {
+    const dir = createTempDir();
+    try {
+      gitInit(dir);
+      gitCommit(dir, 'initial');
+      const filePath = path.join(dir, 'fresh.js');
+      fs.writeFileSync(filePath, 'const key = "sk_live_neverCommitted000000";\n');
+
+      const result = await assessExposure(filePath, dir, 'sk_live_neverCommitted000000');
+
+      expect(result.level).toBe('LOCAL');
+      expect(result.confidence).toBe('high');
+      expect(result.details).toMatch(/Secret content not found/);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('pickaxe is skipped for secrets longer than 200 chars (file-level fallback)', async () => {
+    const dir = createTempDir();
+    try {
+      gitInit(dir);
+      const longSecret = 'A'.repeat(250);
+      const filePath = path.join(dir, 'blob.js');
+      fs.writeFileSync(filePath, `const blob = "${longSecret}";\n`);
+      execSync('git add blob.js', { cwd: dir, stdio: 'ignore' });
+      execSync('git commit -m "add blob"', { cwd: dir, stdio: 'ignore' });
+
+      const result = await assessExposure(filePath, dir, longSecret);
+
+      // File-level branch: committed with medium confidence, file-level wording
+      expect(result.level).toBe('COMMITTED');
+      expect(result.confidence).toBe('medium');
+      expect(result.details).toMatch(/file-level check/);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('results are memoized per (cwd, file, secret) within a run', async () => {
+    const dir = createTempDir();
+    try {
+      gitInit(dir);
+      gitCommit(dir, 'initial');
+      const filePath = path.join(dir, 'memo.js');
+      fs.writeFileSync(filePath, 'const key = "sk_live_memoized00000000";\n');
+
+      const first = await assessExposure(filePath, dir, 'sk_live_memoized00000000');
+      const second = await assessExposure(filePath, dir, 'sk_live_memoized00000000');
+
+      // Same object back — no new git subprocesses for repeat findings
+      expect(second).toBe(first);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});

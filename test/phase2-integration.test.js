@@ -11,7 +11,7 @@ const os = require('os');
 const { execSync } = require('child_process');
 const { scanFiles, scanAll } = require('../src/cli/scanner');
 const { fixAll, dryRun, undo } = require('../src/cli/fixer');
-const { assessExposure } = require('../src/cli/exposure');
+const { assessExposure, clearExposureCache } = require('../src/cli/exposure');
 const { scanHistory, generatePurgeScript } = require('../src/cli/history');
 const { generateSARIF, generateJSONReport } = require('../src/cli/reporter');
 
@@ -253,6 +253,9 @@ describe('Phase 2 Integration', () => {
 
       // Committed -> COMMITTED
       execSync('git commit -m "add config"', { cwd: dir, stdio: 'ignore' });
+      // Exposure results are memoized per (cwd, file, secret) within a run;
+      // clear the cache since the git state changed mid-test.
+      clearExposureCache();
       const committed = await assessExposure('config.js', dir);
       expect(committed.level).toBe('COMMITTED');
       expect(['high', 'medium']).toContain(committed.confidence);

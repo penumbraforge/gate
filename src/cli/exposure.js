@@ -126,16 +126,53 @@ function getRemoteExposureDate(filePath, cwd) {
   return lines.length > 0 ? lines[lines.length - 1] : null;
 }
 
+// Memoization within a scan run: N findings in the same file with the same
+// secret would otherwise spawn ~5N git subprocesses.
+const _exposureCache = new Map();
+const _gitRepoCache = new Map();
+
+function isGitRepoCached(cwd) {
+  if (!_gitRepoCache.has(cwd)) {
+    _gitRepoCache.set(cwd, isGitRepo(cwd));
+  }
+  return _gitRepoCache.get(cwd);
+}
+
+/** Clear memoized exposure results (exposed for tests). */
+function clearExposureCache() {
+  _exposureCache.clear();
+  _gitRepoCache.clear();
+}
+
+// Pickaxe (-S) with very long strings is slow and pointless — those are
+// multiline/entropy blobs, not greppable single values.
+const MAX_PICKAXE_SECRET_LENGTH = 200;
+
 /**
  * Assess the exposure level of a secret in the given file.
  *
+ * Results are memoized per (cwd, file, secret) for the lifetime of the
+ * process (one scan run).
+ *
  * @param {string} filePath — absolute or relative path to the file
  * @param {string} cwd      — working directory (defaults to process.cwd())
+ * @param {string|null} [secretValue] — the bare secret; enables the more
+ *   accurate content-level git pickaxe check
  * @returns {Promise<{level: string, confidence: string, details: string, exposureSince?: string}>}
  */
 async function assessExposure(filePath, cwd = process.cwd(), secretValue = null) {
+  const cacheKey = [cwd, filePath, secretValue || ''].join('\u0000');
+  if (_exposureCache.has(cacheKey)) {
+    return _exposureCache.get(cacheKey);
+  }
+  const result = await assessExposureUncached(filePath, cwd, secretValue);
+  _exposureCache.set(cacheKey, result);
+  return result;
+}
+
+async function assessExposureUncached(filePath, cwd, secretValue) {
   try {
-    if (!isGitRepo(cwd)) {
+    if (!isGitRepoCached(cwd)) {
       return {
         level: 'UNKNOWN',
         confidence: 'low',
@@ -144,8 +181,9 @@ async function assessExposure(filePath, cwd = process.cwd(), secretValue = null)
     }
 
     // Content-level check: use git pickaxe (-S) when secret value is available
-    // This is more accurate than file-level checks for files with history
-    if (secretValue && secretValue.length >= 8) {
+    // This is more accurate than file-level checks for files with history.
+    // Skipped for very long values (multiline/entropy blobs).
+    if (secretValue && secretValue.length >= 8 && secretValue.length <= MAX_PICKAXE_SECRET_LENGTH) {
       const inRemoteContent = isContentInHistory(secretValue, filePath, cwd, true);
       if (inRemoteContent) {
         const exposureSince = getRemoteExposureDate(filePath, cwd);
@@ -254,4 +292,4 @@ function formatExposure(exposure, useColor) {
   }
 }
 
-module.exports = { assessExposure, formatExposure };
+module.exports = { assessExposure, formatExposure, clearExposureCache };

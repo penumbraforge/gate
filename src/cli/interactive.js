@@ -176,7 +176,7 @@ async function runInteractive(findings, options = {}) {
     console.log(formatted);
 
     // ── Exposure assessment ─────────────────────────────────────────────────
-    const exposure = await assessExposure(finding.file, repoDir);
+    const exposure = await assessExposure(finding.file, repoDir, finding.secret);
     const exposureLabel = formatExposure(exposure, useColor);
     console.log('');
     console.log(`  Exposure: ${exposureLabel}`);

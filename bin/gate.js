@@ -637,7 +637,7 @@ async function handleScan(files, options) {
 
   // Assess exposure for each finding
   for (const finding of allFindings) {
-    finding.exposure = await assessExposure(finding.file, process.cwd());
+    finding.exposure = await assessExposure(finding.file, process.cwd(), finding.secret);
   }
 
   // SARIF output mode — use reporter module
@@ -855,7 +855,7 @@ async function handleIncident(files, options) {
   }
 
   for (const finding of allFindings) {
-    finding.exposure = await assessExposure(finding.file, process.cwd());
+    finding.exposure = await assessExposure(finding.file, process.cwd(), finding.secret);
   }
 
   const pushedFindings = allFindings.filter(
@@ -891,7 +891,7 @@ async function handleFix(files, options) {
     for (const finding of interactiveFindings) {
       const rem = getRemediation(finding.ruleId);
       finding.remediation = rem.guide;
-      finding.exposure = await assessExposure(finding.file, process.cwd());
+      finding.exposure = await assessExposure(finding.file, process.cwd(), finding.secret);
     }
 
     const interactiveResult = await runInteractive(interactiveFindings, {
