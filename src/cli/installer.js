@@ -211,23 +211,20 @@ function install(hookType, cwd) {
     } else {
       const existing = fs.readFileSync(hookPath, 'utf8');
 
-      if (existing.includes('gate') || existing.includes(GATE_SECTION_START)) {
-        // Hook already contains Gate — replace the Gate section in place
-        let updated;
-        if (existing.includes(GATE_SECTION_START)) {
-          // Replace the sentineled section
-          const regex = new RegExp(
-            `${escapeRegex(GATE_SECTION_START)}[\\s\\S]*?${escapeRegex(GATE_SECTION_END)}`,
-            'g'
-          );
-          updated = existing.replace(regex, gateSection);
-        } else {
-          // Old-style gate hook without sentinels — replace entirely
-          updated = `#!/bin/sh\n${gateSection}\n`;
-        }
+      // A hook is gate-managed ONLY when the sentinel section is present.
+      // Substring checks like existing.includes('gate') wholesale-replaced
+      // foreign hooks whose content merely contained "gate" (aggregate,
+      // delegate, scripts/gate-keeper.sh, ...).
+      if (existing.includes(GATE_SECTION_START)) {
+        // Replace just the sentineled section, preserving everything else
+        const regex = new RegExp(
+          `${escapeRegex(GATE_SECTION_START)}[\\s\\S]*?${escapeRegex(GATE_SECTION_END)}`,
+          'g'
+        );
+        const updated = existing.replace(regex, gateSection);
         fs.writeFileSync(hookPath, updated, { encoding: 'utf8' });
       } else {
-        // Existing non-Gate hook — append Gate section
+        // Existing non-Gate hook — append Gate section, preserving content
         const separator = existing.endsWith('\n') ? '\n' : '\n\n';
         fs.writeFileSync(hookPath, existing + separator + gateSection + '\n', { encoding: 'utf8' });
       }
@@ -303,8 +300,11 @@ function uninstall(hookType, cwd) {
         fs.writeFileSync(hookPath, updated + '\n', { encoding: 'utf8' });
       }
     } else {
-      // Old-style gate hook or whole file is gate's — just delete it
-      fs.unlinkSync(hookPath);
+      // No Gate sentinel — the hook is not gate-managed. Leave it alone.
+      return {
+        success: true,
+        message: `${hookType} hook is not managed by Gate — left untouched.`,
+      };
     }
 
     return {

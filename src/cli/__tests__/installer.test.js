@@ -95,6 +95,101 @@ describe('installer', () => {
     fs.rmSync(dir, { recursive: true });
   });
 
+  test('foreign hook containing the word "navigate" survives install', () => {
+    const dir = createTempDir();
+    gitInit(dir);
+    const hooksDir = path.join(dir, '.git', 'hooks');
+    fs.mkdirSync(hooksDir, { recursive: true });
+    // Contains the substring "gate" (navigate, delegate) but is NOT gate-managed
+    const foreignContent = '#!/bin/sh\n# navigate to repo root and delegate to lint\nnpm run navigate-lint\n';
+    const hookPath = path.join(hooksDir, 'pre-commit');
+    fs.writeFileSync(hookPath, foreignContent, 'utf8');
+
+    const result = install('pre-commit', dir);
+
+    expect(result.success).toBe(true);
+    const content = fs.readFileSync(hookPath, 'utf8');
+    // Foreign hook content fully preserved
+    expect(content).toContain('npm run navigate-lint');
+    expect(content).toContain('# navigate to repo root and delegate to lint');
+    // Gate section appended with sentinels
+    expect(content).toContain('# --- Gate hook start ---');
+    expect(content).toContain('# --- Gate hook end ---');
+
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  test('installing twice over a foreign hook yields exactly one gate section', () => {
+    const dir = createTempDir();
+    gitInit(dir);
+    const hooksDir = path.join(dir, '.git', 'hooks');
+    fs.mkdirSync(hooksDir, { recursive: true });
+    const hookPath = path.join(hooksDir, 'pre-commit');
+    fs.writeFileSync(hookPath, '#!/bin/sh\n./scripts/gate-keeper.sh\n', 'utf8');
+
+    install('pre-commit', dir);
+    install('pre-commit', dir);
+
+    const content = fs.readFileSync(hookPath, 'utf8');
+    expect(content).toContain('./scripts/gate-keeper.sh');
+    expect(content.split('# --- Gate hook start ---').length - 1).toBe(1);
+    expect(content.split('# --- Gate hook end ---').length - 1).toBe(1);
+
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  test('legacy hook with sentinel gets its section replaced, not duplicated', () => {
+    const dir = createTempDir();
+    gitInit(dir);
+    const hooksDir = path.join(dir, '.git', 'hooks');
+    fs.mkdirSync(hooksDir, { recursive: true });
+    const hookPath = path.join(hooksDir, 'pre-commit');
+    // Simulate an older gate-managed hook plus surrounding foreign content
+    const legacy = [
+      '#!/bin/sh',
+      'echo "pre-existing step"',
+      '# --- Gate hook start ---',
+      '# old gate hook body (stale)',
+      'gate scan --staged',
+      '# --- Gate hook end ---',
+      'echo "post step"',
+      '',
+    ].join('\n');
+    fs.writeFileSync(hookPath, legacy, 'utf8');
+
+    const result = install('pre-commit', dir);
+
+    expect(result.success).toBe(true);
+    const content = fs.readFileSync(hookPath, 'utf8');
+    // Surrounding content preserved
+    expect(content).toContain('echo "pre-existing step"');
+    expect(content).toContain('echo "post step"');
+    // Stale body replaced by the current section — exactly one section
+    expect(content).not.toContain('# old gate hook body (stale)');
+    expect(content.split('# --- Gate hook start ---').length - 1).toBe(1);
+    expect(content).toContain('find_gate_node');
+
+    fs.rmSync(dir, { recursive: true });
+  });
+
+  test('uninstall leaves non-gate hooks untouched', () => {
+    const dir = createTempDir();
+    gitInit(dir);
+    const hooksDir = path.join(dir, '.git', 'hooks');
+    fs.mkdirSync(hooksDir, { recursive: true });
+    const hookPath = path.join(hooksDir, 'pre-commit');
+    const foreign = '#!/bin/sh\n# aggregate lint results\nnpm run lint\n';
+    fs.writeFileSync(hookPath, foreign, 'utf8');
+
+    const result = uninstall('pre-commit', dir);
+
+    expect(result.success).toBe(true);
+    expect(fs.existsSync(hookPath)).toBe(true);
+    expect(fs.readFileSync(hookPath, 'utf8')).toBe(foreign);
+
+    fs.rmSync(dir, { recursive: true });
+  });
+
   test('uninstalls gate hook — removes the hook file', () => {
     const dir = createTempDir();
     gitInit(dir);
