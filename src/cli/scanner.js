@@ -747,8 +747,9 @@ function getStagedFiles() {
   try {
     const { execSync } = require('child_process');
 
-    // Get list of staged files
-    const output = execSync('git diff-index --cached --name-only HEAD', {
+    // Get list of staged files. --diff-filter=d excludes deletions so a commit
+    // that only removes files doesn't fail scanning on now-missing paths.
+    const output = execSync('git diff-index --cached --name-only --diff-filter=d HEAD', {
       encoding: 'utf8',
       stdio: ['pipe', 'pipe', 'ignore'],
     });

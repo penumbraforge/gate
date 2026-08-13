@@ -506,4 +506,33 @@ describe('entropy false-positive guards', () => {
     // Path-like but with a long random segment — still scannable
     expect(scanner.shouldScanForEntropy('api/v1/tr8xPqm2VbLw9ZkYd3RfCnJ0hG5sQxTe4uHiOp1A')).toBe(true);
   });
+
+  test('getStagedFiles excludes staged deletions', () => {
+    const dir = createTempDir();
+    try {
+      const git = (args) => execSync(`git ${args}`, { cwd: dir, stdio: ['pipe', 'pipe', 'ignore'] });
+      git('init');
+      git('config user.email test@example.com');
+      git('config user.name Test');
+      fs.writeFileSync(path.join(dir, 'keep.js'), 'const a = 1;\n');
+      fs.writeFileSync(path.join(dir, 'gone.js'), 'const b = 2;\n');
+      git('add -A');
+      git('commit -m initial');
+
+      // Stage a deletion of gone.js and an addition of new.js.
+      fs.rmSync(path.join(dir, 'gone.js'));
+      fs.writeFileSync(path.join(dir, 'new.js'), 'const c = 3;\n');
+      git('add -A');
+
+      const staged = execSync('git diff-index --cached --name-only --diff-filter=d HEAD', {
+        cwd: dir,
+        encoding: 'utf8',
+      }).trim().split('\n').filter(Boolean);
+
+      expect(staged).toContain('new.js');
+      expect(staged).not.toContain('gone.js');
+    } finally {
+      cleanDir(dir);
+    }
+  });
 });
