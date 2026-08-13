@@ -20,7 +20,7 @@ gate fix            # Auto-fix all findings
 $ npx @penumbraforge/gate
 
   ┌─────────────────────────────────────────┐
-  │  Gate v2.0.1 — secret scanner + fixer   │
+  │  Gate v2.1.0 — secret scanner + fixer   │
   │                                         │
   │  ✓ Pre-commit hook installed            │
   │  ✓ 111 detection rules loaded           │

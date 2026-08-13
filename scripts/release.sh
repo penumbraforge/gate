@@ -7,8 +7,12 @@ set -euo pipefail
 #
 # This script:
 #   1. Updates version in package.json
-#   2. Runs tests
-#   3. Commits, tags, and pushes
+#   2. Rebuilds the action bundle and regenerates the rule-count docs
+#   3. Runs tests + self-scan
+#   4. Commits, tags, and pushes
+#
+# Pushing the v<version> tag triggers .github/workflows/release.yml, which
+# publishes to npm via OIDC trusted publishing (no npm token needed here).
 
 BOLD="\033[1m"
 GREEN="\033[32m"
@@ -56,23 +60,31 @@ fi
 info "Updating package.json..."
 npm version "$NEW_VERSION" --no-git-tag-version --allow-same-version
 
-# 2. Run tests
+# 2. Rebuild the GitHub Action bundle and regenerate the rule-count docs so the
+#    committed artifacts match the new version before tagging.
+info "Building action bundle..."
+npm run build:action
+
+info "Regenerating docs..."
+npm run docs
+
+# 3. Run tests
 info "Running tests..."
 npm test
 
-# 3. Self-scan
+# 4. Self-scan
 info "Running self-scan..."
 node bin/gate.js scan --all
 
-# 4. Commit and tag
+# 5. Commit and tag
 info "Committing..."
-git add package.json package-lock.json
+git add package.json package-lock.json github-action/dist README.md GUIDE.md
 git commit -m "v${NEW_VERSION}: release"
 
 info "Tagging v${NEW_VERSION}..."
 git tag -a "v${NEW_VERSION}" -m "Gate v${NEW_VERSION}"
 
-# 5. Push
+# 6. Push
 REMOTE="${GATE_REMOTE:-$(git remote | head -1)}"
 if [ -z "$REMOTE" ]; then
   error "No git remote configured. Set GATE_REMOTE or add a remote."
@@ -85,6 +97,6 @@ echo ""
 echo -e "${GREEN}${BOLD}Release v${NEW_VERSION} complete!${RESET}"
 echo ""
 echo "  Git: pushed to ${REMOTE}/main with tag v${NEW_VERSION}"
-echo "  npm: run 'npm publish' to publish to npm registry"
+echo "  npm: the v${NEW_VERSION} tag triggers .github/workflows/release.yml (OIDC publish)"
 echo ""
 echo "Users will be notified on next CLI run via 'gate update'."

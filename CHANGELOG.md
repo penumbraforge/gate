@@ -5,6 +5,59 @@ All notable changes to Gate will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.1.0] — 2026-08-12
+
+### Security
+- **Stop leaking plaintext secrets** in scan reports, JSON/SARIF output, and
+  generated purge artifacts. The `match` field is now redacted and each finding
+  carries a `secretHash` (SHA-256 prefix); purge scripts are written under
+  `~/.gate/purge/` instead of alongside source.
+- **Credential verification is now opt-in and OFF by default.** It runs only
+  when `--verify` is passed (or `verify: true` is set in `.gaterc`), never
+  implicitly — so scans no longer make live API calls with detected secrets
+  unless you ask.
+
+### Changed
+- **Node.js baseline raised to >= 22** (18 and 20 are EOL); CI matrix is now
+  22 / 24 / 26. May be breaking for older runtimes.
+- **JSON and SARIF output redact the secret value** (previously the raw match
+  could appear) and add a `secretHash` field — a behavioral change for anything
+  parsing scan output.
+- **GitHub Action rebuilt to actually run:** metadata moved to a repo-root
+  `action.yml` (runs.using `node24`), source bundled with `@vercel/ncc` into
+  `github-action/dist/index.js`. `uses: penumbraforge/gate@v2` now resolves.
+- Removed the unused TypeScript toolchain (`typescript`, `@types/*`,
+  `tsconfig.json`); committed `package-lock.json` for reproducible `npm ci`.
+
+### Fixed
+- **Load the FORTRESS rules.json pack into the live rule set.** Its 68 signed
+  rules were only signature-checked, never used for detection — the advertised
+  PII/K8s/SQLi/DigitalOcean coverage did not actually exist. They are now
+  deduplicated against the built-ins and merged, giving 111 live rules.
+- Fixed 64 KiB stdout truncation that could corrupt large JSON/SARIF output.
+- Fixes now rewrite only the secret value (`finding.secret`) instead of the
+  whole matched line; exposure assessment uses the same precise value.
+- Installer no longer clobbers foreign git hooks — the Gate sentinel is the
+  only marker it will overwrite.
+- Fixed a `withTimeout` timer leak, updater/build-step and release-remote bugs,
+  skipped-file miscounting, and several entropy false positives.
+- Vault now persists the full ciphertext so the interactive Vault action is
+  recoverable via `VAULT:<id>` from `~/.gate/vault.json`.
+- Staged deletions no longer break the pre-commit scan (a commit that only
+  removes files was previously blocked by Gate's own hook).
+
+### Added
+- Live PII detection (US SSN, credit card), Kubernetes secrets, SQL-injection,
+  DigitalOcean, Azure key variants, and more — from the newly-loaded FORTRESS
+  pack.
+- `use-local` action input to run the checked-out CLI (`node bin/gate.js`)
+  instead of the npm package, enabling CI self-tests of unreleased versions.
+- Audit-log rotation: `~/.gate/audit.jsonl` rotates at 5MB (two generations).
+- `scan-report` action output is capped under GitHub's 1 MiB output limit.
+- `scripts/gen-docs.js` generates the rule-count docs from the live rule set,
+  with a `--check` mode enforced in CI, plus new CI jobs for coverage,
+  action-bundle freshness, and an unmocked action self-test.
+
 ## [2.0.1] — 2026-03-31
 
 ### Changed
