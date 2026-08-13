@@ -14,7 +14,7 @@ const { EventEmitter } = require('events');
 // ─── Module-level mocks (variable names must start with "mock" per Jest) ────
 
 const mockFixer = { fixFinding: jest.fn(), updateEnvFile: jest.fn(), ensureGitignore: jest.fn() };
-const mockVault = { encrypt: jest.fn() };
+const mockVault = { encrypt: jest.fn(), store: jest.fn(), retrieve: jest.fn() };
 const mockExposure = { assessExposure: jest.fn(), formatExposure: jest.fn() };
 const mockRemediation = { getRemediation: jest.fn(), getActionLabel: jest.fn() };
 
@@ -61,6 +61,13 @@ beforeEach(() => {
 
   mockFixer.fixFinding.mockReset();
   mockVault.encrypt.mockReset();
+  mockVault.store.mockReset();
+  mockVault.store.mockReturnValue({
+    id: 'abc123def456',
+    ciphertext: 'ZmFrZS1jaXBoZXJ0ZXh0',
+    createdAt: new Date().toISOString(),
+  });
+  mockVault.retrieve.mockReset();
   mockExposure.assessExposure.mockReset();
   mockExposure.formatExposure.mockReset();
   mockRemediation.getRemediation.mockReset();

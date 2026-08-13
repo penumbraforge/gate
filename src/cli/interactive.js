@@ -301,19 +301,22 @@ async function runInteractive(findings, options = {}) {
 
     } else if (action === 'v') {
       try {
-        const encrypted = vault.encrypt(finding.match || '');
+        const plaintext = finding.secret || finding.match || '';
+        // Persist the full ciphertext to ~/.gate/vault.json; the source only
+        // carries the id, so the secret stays recoverable via retrieve(id).
+        const { id } = vault.store(plaintext);
         const content = fs.readFileSync(finding.file, 'utf8');
-        const vaultRef = `VAULT:${encrypted.slice(0, 20)}`;
-        const updated = content.split(finding.match).join(vaultRef);
+        const vaultRef = `VAULT:${id}`;
+        const updated = content.split(plaintext).join(vaultRef);
         if (updated !== content) {
           fs.writeFileSync(finding.file, updated);
           modifiedFiles.push(finding.file);
           summary.vaulted++;
-          console.log(`  ${c(useColor, GREEN, '✓')} Secret replaced with vault reference`);
+          console.log(`  ${c(useColor, GREEN, '✓')} Secret replaced with vault reference ${vaultRef}`);
         } else {
           summary.vaulted++;
           console.log(`  ${c(useColor, GREEN, '✓')} Encrypted (secret not found in source for inline replacement)`);
-          console.log(`  ${c(useColor, DIM, encrypted.slice(0, 40) + '...')}`);
+          console.log(`  ${c(useColor, DIM, `Stored as ${vaultRef}`)}`);
         }
       } catch (err) {
         console.log(`  ${c(useColor, YELLOW, '!')} Vault error: ${err.message}`);

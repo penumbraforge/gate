@@ -103,6 +103,69 @@ function decrypt(blob) {
   return plaintext;
 }
 
+// ── Vault store — persisted ciphertexts addressable by short id ─────────────
+
+function getStorePath() {
+  return getGatePath('vault.json');
+}
+
+/**
+ * Load the persisted vault entries from ~/.gate/vault.json.
+ * @returns {Array<{ id: string, ciphertext: string, createdAt: string }>}
+ */
+function loadStore() {
+  try {
+    const storePath = getStorePath();
+    if (fs.existsSync(storePath)) {
+      const parsed = JSON.parse(fs.readFileSync(storePath, 'utf8'));
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {
+    // Corrupted store — treat as empty rather than losing the ability to add
+  }
+  return [];
+}
+
+function saveStore(entries) {
+  ensureGateDir();
+  fs.writeFileSync(getStorePath(), JSON.stringify(entries, null, 2), { mode: 0o600 });
+}
+
+/**
+ * Encrypt a plaintext value and persist it to ~/.gate/vault.json.
+ * The full ciphertext lives in the store; source code only needs the id
+ * (VAULT:<id>), so the secret stays recoverable.
+ *
+ * @param {string} plaintext
+ * @returns {{ id: string, ciphertext: string, createdAt: string }}
+ */
+function store(plaintext) {
+  const ciphertext = encrypt(plaintext);
+  const id = crypto.createHash('sha256').update(ciphertext).digest('hex').slice(0, 12);
+  const entry = { id, ciphertext, createdAt: new Date().toISOString() };
+
+  const entries = loadStore();
+  entries.push(entry);
+  saveStore(entries);
+
+  return entry;
+}
+
+/**
+ * Look up a stored ciphertext by id and decrypt it.
+ *
+ * @param {string} id - 12-hex-char id (as embedded in VAULT:<id> references)
+ * @returns {string} plaintext
+ */
+function retrieve(id) {
+  const entries = loadStore();
+  const entry = entries.find(e => e.id === id);
+  if (!entry) {
+    throw new Error(`Vault entry not found: ${id}`);
+  }
+  return decrypt(entry.ciphertext);
+}
+
 /**
  * Encrypt all values in a .env file, writing to <file>.encrypted
  * @param {string} filePath - path to .env file
@@ -160,5 +223,7 @@ module.exports = {
   keygen,
   encrypt,
   decrypt,
+  store,
+  retrieve,
   encryptEnvFile,
 };
