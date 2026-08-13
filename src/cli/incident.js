@@ -266,17 +266,21 @@ function generateAuditGuidance(ruleId, exposureWindow = {}) {
  * Generate a git-filter-repo shell script that replaces the exact secret value
  * with REDACTED_BY_GATE in the full git history.
  *
- * The script is saved to <repoDir>/.gate/purge-<date>.sh but is NEVER executed.
+ * The script and replacements file contain plaintext secrets (git-filter-repo
+ * and BFG need the literal values), so they are saved OUTSIDE the repository,
+ * under ~/.gate/purge/<timestamp>/, and are NEVER executed automatically.
  *
- * @param {object} finding - scanner finding (must have .match)
- * @param {string} repoDir - repository root directory
- * @returns {string} the script contents
+ * @param {object} finding - scanner finding (must have .secret or .match)
+ * @param {string} repoDir - repository root directory (metadata only)
+ * @returns {{ script: string, scriptPath: string, replacementsPath: string }}
  */
 function generatePurgeScript(finding, repoDir) {
   const secretValue = finding.secret || finding.match;
   const date = new Date().toISOString().slice(0, 10);
-  const scriptPath = path.join(repoDir, '.gate', `purge-${date}.sh`);
-  const replacementsPath = path.join(repoDir, '.gate', `replacements-${date}.txt`);
+  // Plaintext secrets — keep them out of the repo working tree
+  const purgeDir = getGatePath('purge', Date.now().toString());
+  const scriptPath = path.join(purgeDir, `purge-${date}.sh`);
+  const replacementsPath = path.join(purgeDir, `replacements-${date}.txt`);
 
   // Build the replacements file content for git-filter-repo --replace-text
   const replacementsContent = `literal:${secretValue}==>literal:REDACTED_BY_GATE\n`;
@@ -346,19 +350,20 @@ echo ""
 # bfg --replace-text replacements.txt
 `;
 
-  // Write the script and replacements file to disk (creating .gate/ directory if needed)
+  // Write the script and replacements file to disk (creating the purge
+  // directory with owner-only permissions if needed)
   try {
-    const gateDir = path.join(repoDir, '.gate');
-    fs.mkdirSync(gateDir, { recursive: true, mode: 0o700 });
+    fs.mkdirSync(purgeDir, { recursive: true, mode: 0o700 });
+    fs.chmodSync(purgeDir, 0o700);
     // Write replacements file with owner-only read/write permissions
     fs.writeFileSync(replacementsPath, replacementsContent, { mode: 0o600 });
     // Write purge script with owner-only executable permissions
     fs.writeFileSync(scriptPath, script, { mode: 0o700 });
   } catch {
-    // Non-fatal — caller may not have a real repoDir in tests
+    // Non-fatal — filesystem may be read-only in constrained environments
   }
 
-  return script;
+  return { script, scriptPath, replacementsPath };
 }
 
 // ─── Step 5: DOCUMENT ────────────────────────────────────────────────────────
@@ -602,10 +607,9 @@ async function startIncidentResponse(finding, options = {}) {
 
   // Step 4: SCRUB HISTORY
   console.log(`\n${BOLD}Step 4/5 — SCRUB GIT HISTORY${RESET}`);
-  const date = new Date().toISOString().slice(0, 10);
-  const scriptPath = path.join(repoDir, '.gate', `purge-${date}.sh`);
-  generatePurgeScript(finding, repoDir);
-  console.log(`  ${YELLOW}Purge script saved to: ${scriptPath}${RESET}`);
+  const purgeResult = generatePurgeScript(finding, repoDir);
+  console.log(`  ${YELLOW}Purge script saved to: ${purgeResult.scriptPath}${RESET}`);
+  console.log(`  ${RED}WARNING: ${purgeResult.replacementsPath} contains plaintext secrets — delete after use.${RESET}`);
   console.log('  Review the script, then run it manually when ready.');
   console.log(`  ${RED}WARNING: This rewrites git history. All collaborators must re-clone.${RESET}`);
 

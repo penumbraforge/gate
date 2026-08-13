@@ -362,3 +362,56 @@ describe('generateIncidentReport', () => {
     expect(report).toContain('Git history scrubbed');
   });
 });
+
+// ── Secret redaction in JSON reports ──────────────────────────────────────────
+
+describe('generateJSONReport secret redaction', () => {
+  const PLANTED_SECRET = 'AKIAIOSFODNN7PLANTED';
+
+  function makeResultsWithSecret() {
+    return {
+      filesScanned: [
+        {
+          file: 'src/leak.js',
+          findings: [
+            {
+              ruleId: 'aws-access-key-id',
+              ruleName: 'AWS Access Key ID',
+              severity: 'critical',
+              lineNumber: 1,
+              matchStart: 13,
+              matchLength: PLANTED_SECRET.length,
+              match: PLANTED_SECRET,
+              secret: PLANTED_SECRET,
+            },
+          ],
+        },
+      ],
+    };
+  }
+
+  test('JSON report never contains the plaintext secret', () => {
+    const report = generateJSONReport(makeResultsWithSecret());
+    const serialized = JSON.stringify(report);
+
+    expect(serialized).not.toContain(PLANTED_SECRET);
+    expect(report.findings[0].match).toBe('AKIA****NTED');
+  });
+
+  test('JSON report carries a stable secretHash for cross-run correlation', () => {
+    const crypto = require('crypto');
+    const report = generateJSONReport(makeResultsWithSecret());
+    const expectedHash = crypto.createHash('sha256')
+      .update(PLANTED_SECRET).digest('hex').slice(0, 12);
+
+    expect(report.findings[0].secretHash).toBe(expectedHash);
+    // Stable across runs
+    const again = generateJSONReport(makeResultsWithSecret());
+    expect(again.findings[0].secretHash).toBe(expectedHash);
+  });
+
+  test('SARIF output never contains the plaintext secret', () => {
+    const sarif = generateSARIF(makeResultsWithSecret());
+    expect(JSON.stringify(sarif)).not.toContain(PLANTED_SECRET);
+  });
+});

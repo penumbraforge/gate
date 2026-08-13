@@ -5,7 +5,9 @@
 
 'use strict';
 
+const crypto = require('crypto');
 const { getRemediation } = require('./remediation');
+const { redactSecret } = require('./output');
 
 // ── Compliance framework mappings ─────────────────────────────────────────────
 
@@ -553,6 +555,9 @@ function generateJSONReport(scanResults, options = {}) {
     const remediation = getRemediation(finding.ruleId);
     const compliance  = finding.compliance || getCompliance(finding.ruleId);
     const findingFile = finding.file || null;
+    // Never emit the plaintext secret — redact for display, hash for
+    // cross-run correlation.
+    const secretValue = finding.secret || finding.match || null;
 
     if (findingFile) {
       uniqueFiles.add(findingFile);
@@ -565,7 +570,10 @@ function generateJSONReport(scanResults, options = {}) {
       file:         findingFile,
       line:         finding.lineNumber || null,
       column:       finding.matchStart != null ? finding.matchStart + 1 : null,
-      match:        finding.match || null,
+      match:        secretValue ? redactSecret(secretValue) : null,
+      secretHash:   secretValue
+        ? crypto.createHash('sha256').update(secretValue).digest('hex').slice(0, 12)
+        : null,
       verification: finding.verification ? finding.verification.status || finding.verification : 'unknown',
       exposure:     finding.exposure || 'unknown',
       remediation: {

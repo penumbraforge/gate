@@ -10,6 +10,7 @@ const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
 const { scanForPatterns } = require('./scanner');
+const { getGatePath, ensureDir } = require('./paths');
 
 /**
  * Run a git command in a given directory, returning stdout as a string.
@@ -205,6 +206,7 @@ async function scanHistory(n = 50, options = {}) {
           ruleName: m.ruleName,
           severity: m.severity,
           match: m.match,
+          secret: m.secret || m.match,
           daysInHistory: daysAgo(commit.date),
         });
       }
@@ -219,38 +221,36 @@ async function scanHistory(n = 50, options = {}) {
 
 /**
  * Generate a bash purge script that uses git-filter-repo to redact secrets.
- * Saves the script to .gate/purge-<date>.sh (relative to cwd).
+ *
+ * The script and its replacements file contain plaintext secrets (BFG /
+ * git-filter-repo require the literal values), so they are written OUTSIDE
+ * the repository working tree, under ~/.gate/purge/<timestamp>/ with
+ * owner-only permissions.
  *
  * @param {Array} findings - Array of findings from scanHistory
  * @param {object} [options={}] - Options
- * @param {string} [options.cwd] - Working directory
- * @returns {Promise<{scriptPath: string, affectedFiles: string[], secretCount: number}>}
+ * @param {string} [options.cwd] - Working directory (unused for output location)
+ * @returns {Promise<{scriptPath: string, replacementsPath: string, affectedFiles: string[], secretCount: number}>}
  */
 async function generatePurgeScript(findings, options = {}) {
-  const cwd = options.cwd || process.cwd();
-
   // Collect unique secret values
   const uniqueSecrets = [...new Set(
     findings
-      .map(f => f.match)
+      .map(f => f.secret || f.match)
       .filter(Boolean)
-      // Strip trailing ellipsis added by entropy truncation
+      // Strip legacy truncated values (pre-secret findings)
       .filter(m => !m.endsWith('...'))
   )];
 
   // Collect unique affected files
   const affectedFiles = [...new Set(findings.map(f => f.file).filter(Boolean))];
 
-  // Ensure .gate/ directory exists with owner-only permissions
-  const gateDir = path.join(cwd, '.gate');
-  if (!fs.existsSync(gateDir)) {
-    fs.mkdirSync(gateDir, { recursive: true, mode: 0o700 });
-  }
-
   const now = new Date();
   const dateTag = now.toISOString().slice(0, 10); // YYYY-MM-DD
-  const scriptPath = path.join(gateDir, `purge-${dateTag}.sh`);
-  const replacementsPath = path.join(gateDir, `replacements-${dateTag}.txt`);
+  // Plaintext secrets — keep them out of the scanned repo tree
+  const purgeDir = ensureDir(getGatePath('purge', Date.now().toString()));
+  const scriptPath = path.join(purgeDir, `purge-${dateTag}.sh`);
+  const replacementsPath = path.join(purgeDir, `replacements-${dateTag}.txt`);
 
   // Build the replacements file content for git-filter-repo --replace-text
   // Format: literal:SECRET==>literal:REDACTED_BY_GATE

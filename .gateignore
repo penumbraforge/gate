@@ -17,6 +17,10 @@ src/cli/rules.js
 # generic assignment rules
 src/cli/scanner.js
 
+# History scanner — finding-construction code and purge-script templates
+# trip the generic assignment rules
+src/cli/history.js
+
 # Credential verifier — references token patterns for API verification
 src/cli/verify.js
 

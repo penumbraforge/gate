@@ -1385,6 +1385,7 @@ async function main() {
         const purgeResult = await generatePurgeScript(historyResults.findings, { cwd: process.cwd() });
         console.log(`  Purge script saved to ${purgeResult.scriptPath}`);
         console.log(`  ${purgeResult.secretCount} secret(s) in ${purgeResult.affectedFiles.length} file(s)`);
+        console.log(`  WARNING: ${purgeResult.replacementsPath} contains plaintext secrets — delete after use.`);
         console.log('  Review the script before running it.');
         break;
       }

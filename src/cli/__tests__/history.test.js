@@ -292,3 +292,32 @@ test('9. handles repos with no history — returns graceful empty result', async
     cleanDir(dir);
   }
 });
+
+// ─── Test 10: purge artifacts live outside the repo, under the gate home ──────
+test('10. generatePurgeScript writes plaintext artifacts under gate home, not the scanned repo', async () => {
+  const { getGateHome } = require('../paths');
+  const dir = createTempDir();
+  try {
+    gitInit(dir);
+    commitFile(dir, 'config.js', 'const key = "AKIAIOSFODNN7EXAMPLE";\n', 'add secret');
+
+    const result = await history.scanHistory(50, { cwd: dir });
+    const purgeResult = await history.generatePurgeScript(result.findings, { cwd: dir });
+
+    // Plaintext replacements must NOT be written into the scanned repo
+    expect(purgeResult.replacementsPath.startsWith(getGateHome() + path.sep)).toBe(true);
+    expect(purgeResult.scriptPath.startsWith(getGateHome() + path.sep)).toBe(true);
+    expect(purgeResult.replacementsPath.startsWith(dir)).toBe(false);
+    expect(fs.existsSync(path.join(dir, '.gate'))).toBe(false);
+
+    // Owner-only permissions
+    expect(fs.statSync(purgeResult.replacementsPath).mode & 0o777).toBe(0o600);
+    expect(fs.statSync(path.dirname(purgeResult.replacementsPath)).mode & 0o777).toBe(0o700);
+
+    // Purge uses the bare secret value from finding.secret
+    const replacements = fs.readFileSync(purgeResult.replacementsPath, 'utf8');
+    expect(replacements).toContain('literal:AKIAIOSFODNN7EXAMPLE==>literal:REDACTED_BY_GATE');
+  } finally {
+    cleanDir(dir);
+  }
+});

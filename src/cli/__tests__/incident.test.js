@@ -128,7 +128,7 @@ describe('generateAuditGuidance', () => {
 describe('generatePurgeScript', () => {
   test('7. includes git-filter-repo command with correct secret replacement', () => {
     const finding = makeFinding({ match: 'AKIAIOSFODNN7EXAMPLE' });
-    const script = incident.generatePurgeScript(finding, '/project');
+    const { script } = incident.generatePurgeScript(finding, '/project');
 
     expect(typeof script).toBe('string');
     expect(script).toContain('git-filter-repo');
@@ -142,7 +142,7 @@ describe('generatePurgeScript', () => {
 
   test('8. does NOT include uncommented force-push command', () => {
     const finding = makeFinding({ match: 'AKIAIOSFODNN7EXAMPLE' });
-    const script = incident.generatePurgeScript(finding, '/project');
+    const { script } = incident.generatePurgeScript(finding, '/project');
 
     // Split into lines and find force-push lines
     const lines = script.split('\n');
@@ -153,6 +153,32 @@ describe('generatePurgeScript', () => {
     // All force-push lines must be commented out (start with # possibly with whitespace)
     for (const line of forcePushLines) {
       expect(line.trim()).toMatch(/^#/);
+    }
+  });
+
+  // ─── 8b. plaintext replacements live outside the repo, under gate home ──
+
+  test('8b. writes replacements file under the gate home, not the repo', () => {
+    const { getGateHome } = require('../paths');
+    const repoDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-inc-repo-'));
+    try {
+      const finding = makeFinding({ match: 'AKIAIOSFODNN7EXAMPLE' });
+      const result = incident.generatePurgeScript(finding, repoDir);
+
+      expect(result.replacementsPath.startsWith(getGateHome() + path.sep)).toBe(true);
+      expect(result.scriptPath.startsWith(getGateHome() + path.sep)).toBe(true);
+      expect(result.replacementsPath.startsWith(repoDir)).toBe(false);
+      expect(fs.existsSync(path.join(repoDir, '.gate'))).toBe(false);
+
+      // Replacements file exists, contains the plaintext, and is owner-only
+      const content = fs.readFileSync(result.replacementsPath, 'utf8');
+      expect(content).toContain('AKIAIOSFODNN7EXAMPLE');
+      const mode = fs.statSync(result.replacementsPath).mode & 0o777;
+      expect(mode).toBe(0o600);
+      const dirMode = fs.statSync(path.dirname(result.replacementsPath)).mode & 0o777;
+      expect(dirMode).toBe(0o700);
+    } finally {
+      fs.rmSync(repoDir, { recursive: true, force: true });
     }
   });
 });
