@@ -629,14 +629,15 @@ async function handleScan(files, options) {
     }
   }
 
-  // Load rule count for scan header
-  const { RULES } = require('../src/cli/rules');
+  // Load rule count for scan header (built-ins + FORTRESS pack)
+  const { getRules } = require('../src/cli/rules');
+  const ruleCount = getRules().length;
   const scanExtra = { fileCount: results.filesScanned.length, elapsed: scanElapsed };
 
   // Text output
   if (results.totalFindings > 0) {
     // Scan header
-    console.log(formatScanHeader(VERSION, RULES.length, results.filesScanned.length, useColor));
+    console.log(formatScanHeader(VERSION, ruleCount, results.filesScanned.length, useColor));
 
     // Header
     console.log(formatHeader(results.totalFindings, useColor));
@@ -743,7 +744,7 @@ async function handleScan(files, options) {
     return;
   } else {
     // No findings — clean
-    console.log(formatScanHeader(VERSION, RULES.length, results.filesScanned.length, useColor));
+    console.log(formatScanHeader(VERSION, ruleCount, results.filesScanned.length, useColor));
 
     const commitHash = getCurrentCommitHash();
     recordScan({
@@ -1218,10 +1219,10 @@ async function main() {
     if (!gateWasInstalled) {
       const hookResult = install('pre-commit');
       if (hookResult.success) {
-        const { RULES } = require('../src/cli/rules');
+        const { getRules } = require('../src/cli/rules');
         const colorSetting = !(process.argv.includes('--no-color'));
         const useColor = shouldUseColor(colorSetting);
-        console.log(formatBanner(VERSION, RULES.length, useColor));
+        console.log(formatBanner(VERSION, getRules().length, useColor));
       }
     } else {
       await handleStatus();

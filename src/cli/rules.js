@@ -7,11 +7,19 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
+/**
+ * Verify the HMAC-SHA256 signature of rules/rules.json.
+ *
+ * @returns {boolean} true when the signature is valid, or when no .sig file is
+ *   present (dev clones load unsigned rules). false when a signature is present
+ *   but does NOT match, or when verification cannot be performed.
+ */
 function verifyRuleSignature() {
   try {
     const rulesPath = path.join(__dirname, '../../rules/rules.json');
     const sigPath = rulesPath + '.sig';
-    if (!fs.existsSync(sigPath)) return;
+    // No signature file: treat as verifiable (caller decides whether to warn).
+    if (!fs.existsSync(sigPath)) return true;
 
     const { getDerivedKey } = require('../../rules/fortress');
     const data = fs.readFileSync(rulesPath, 'utf8');
@@ -22,13 +30,14 @@ function verifyRuleSignature() {
 
     if (sig !== expected) {
       console.error("gate: Rule file signature mismatch — rules may have been modified. Run 'gate update' to restore.");
+      return false;
     }
+    return true;
   } catch {
-    // Don't block scanning on verification errors
+    // Don't block scanning on verification errors, but signal "unverified".
+    return false;
   }
 }
-
-let _signatureVerified = false;
 
 const RULES = [
   // AWS
@@ -969,35 +978,41 @@ const RULES = [
 ];
 
 /**
- * Get all rules
+ * Load the deduplicated FORTRESS rules (from rules/rules.json) that are unique
+ * relative to the built-ins. Lazy-required to avoid a module load-time cycle.
+ *
+ * @returns {Array}
  */
-function getRules() {
-  return RULES;
+function loadedFortressRules() {
+  return require('./rules-loader').loadFortressRules();
 }
 
 /**
- * Get rule by ID
+ * Get all rules — built-ins plus the unique FORTRESS pack rules.
+ */
+function getRules() {
+  return [...RULES, ...loadedFortressRules()];
+}
+
+/**
+ * Get rule by ID (searches built-ins then FORTRESS rules).
  */
 function getRuleById(id) {
-  return RULES.find((r) => r.id === id);
+  return getRules().find((r) => r.id === id);
 }
 
 /**
  * Get rules by severity
  */
 function getRulesBySeverity(severity) {
-  return RULES.filter((r) => r.severity === severity);
+  return getRules().filter((r) => r.severity === severity);
 }
 
 /**
  * Get rules for pattern matching (exclude entropy-only rules)
  */
 function getPatternRules() {
-  if (!_signatureVerified) {
-    _signatureVerified = true;
-    verifyRuleSignature();
-  }
-  return RULES.filter((r) => r.pattern !== null);
+  return getRules().filter((r) => r.pattern !== null);
 }
 
 /**
@@ -1017,7 +1032,7 @@ function getEntropyRule() {
  */
 function getRulesWithCustom(customRules) {
   if (!Array.isArray(customRules) || customRules.length === 0) {
-    return RULES;
+    return getRules();
   }
 
   const compiled = customRules.map((r) => ({
@@ -1026,7 +1041,7 @@ function getRulesWithCustom(customRules) {
     entropy: false,
   }));
 
-  return [...RULES, ...compiled];
+  return [...getRules(), ...compiled];
 }
 
 module.exports = {
@@ -1037,4 +1052,5 @@ module.exports = {
   getPatternRules,
   getEntropyRule,
   getRulesWithCustom,
+  verifyRuleSignature,
 };

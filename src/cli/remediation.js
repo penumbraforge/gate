@@ -457,7 +457,20 @@ const ACTION_LABELS = {
 };
 
 function getRemediation(ruleId) {
-  return REMEDIATION_MAP[ruleId] || DEFAULT_REMEDIATION;
+  if (REMEDIATION_MAP[ruleId]) return REMEDIATION_MAP[ruleId];
+
+  // Fall back to a FORTRESS (rules.json) rule's own remediation string.
+  try {
+    const { getRuleById } = require('./rules');
+    const rule = getRuleById(ruleId);
+    if (rule && typeof rule.remediation === 'string' && rule.remediation.trim()) {
+      return { action: 'review', guide: rule.remediation, link: rule.link || null };
+    }
+  } catch {
+    // Fall through to default on any lookup error.
+  }
+
+  return DEFAULT_REMEDIATION;
 }
 
 function getActionLabel(action) {

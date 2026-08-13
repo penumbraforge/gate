@@ -50,8 +50,17 @@ describe('getRules', () => {
     expect(uniqueIds.size).toBe(ids.length);
   });
 
-  test('returns the same array as RULES constant', () => {
-    expect(getRules()).toBe(RULES);
+  test('includes every built-in rule plus the unique FORTRESS pack rules', () => {
+    const merged = getRules();
+    // Built-ins come first and are all present.
+    expect(merged.slice(0, RULES.length)).toEqual(RULES);
+    // The merged set is strictly larger (FORTRESS rules were appended).
+    expect(merged.length).toBeGreaterThan(RULES.length);
+    // Every built-in id survives the merge.
+    const mergedIds = new Set(merged.map((r) => r.id));
+    for (const rule of RULES) {
+      expect(mergedIds.has(rule.id)).toBe(true);
+    }
   });
 });
 

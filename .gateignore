@@ -13,6 +13,9 @@ rules/fortress.js
 # Rule source — contains regex patterns and PEM header strings for detection
 src/cli/rules.js
 
+# FORTRESS rule loader — maps rules.json patterns, trips generic assignment rules
+src/cli/rules-loader.js
+
 # Scanner engine — finding-construction code and regex literals trip the
 # generic assignment rules
 src/cli/scanner.js
