@@ -529,7 +529,9 @@ async function handleScan(files, options) {
       console.log('');
     }
 
-    process.exit(historyResults.findings.length > 0 ? 1 : 0);
+    // Output may exceed the 64 KiB pipe buffer — avoid process.exit()
+    process.exitCode = historyResults.findings.length > 0 ? 1 : 0;
+    return;
   }
 
   // Determine files to scan
@@ -639,15 +641,20 @@ async function handleScan(files, options) {
   }
 
   // SARIF output mode — use reporter module
+  // Large payloads must not be followed by process.exit(): when stdout is a
+  // pipe, Node discards anything not yet flushed (~64 KiB). Set exitCode and
+  // let the event loop drain instead.
   if (outputFormat === 'sarif') {
-    console.log(JSON.stringify(generateSARIF(results, { findings: allFindings }), null, 2));
-    process.exit(results.totalFindings > 0 || results.errorCount > 0 ? 1 : 0);
+    process.exitCode = results.totalFindings > 0 || results.errorCount > 0 ? 1 : 0;
+    process.stdout.write(JSON.stringify(generateSARIF(results, { findings: allFindings }), null, 2) + '\n');
+    return;
   }
 
   // JSON output mode — use reporter module
   if (outputFormat === 'json') {
-    console.log(JSON.stringify(generateJSONReport(results, { findings: allFindings }), null, 2));
-    process.exit(results.totalFindings > 0 || results.errorCount > 0 ? 1 : 0);
+    process.exitCode = results.totalFindings > 0 || results.errorCount > 0 ? 1 : 0;
+    process.stdout.write(JSON.stringify(generateJSONReport(results, { findings: allFindings }), null, 2) + '\n');
+    return;
   }
 
   // CI mode — emit annotations
@@ -766,7 +773,9 @@ async function handleScan(files, options) {
       }
     }
 
-    process.exit(results.errorCount > 0 || results.totalFindings > 0 ? 1 : 0);
+    // Finding output can exceed the 64 KiB pipe buffer — avoid process.exit()
+    process.exitCode = results.errorCount > 0 || results.totalFindings > 0 ? 1 : 0;
+    return;
   } else {
     // No findings — clean
     console.log(formatScanHeader(VERSION, RULES.length, results.filesScanned.length, useColor));
