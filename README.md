@@ -2,9 +2,11 @@
 
 # Gate
 
-**The secret scanner that fixes what it finds. For free.**
+A command-line scanner that looks for hardcoded secrets and helps you move them out of your code.
 
-Gate catches secrets before they're committed, verifies if they're live, and auto-fixes them across 9 languages. It generates compliance reports, incident documentation, and git history purge scripts — the remediation most scanners leave to you.
+> **Status: experimental, pre-1.0.** Detection is pattern-based (regex plus entropy heuristics), so it will produce false positives and it will miss secrets that don't match a rule. Read any change `gate fix` makes before you commit it, and please report what breaks.
+
+Gate scans files, staged changes, or git history against a set of detection rules. For a subset of providers it can check whether a detected credential still authenticates. It can rewrite findings into environment variables, and it generates compliance reports, incident documentation, and git history purge scripts that you run yourself.
 
 **Full documentation:** [penumbraforge.com/gate/wiki](https://penumbraforge.com/gate/wiki/)
 
@@ -36,25 +38,27 @@ $ npx @penumbraforge/gate
   ✓ Scanned 387 files in 1.2s
 ```
 
-That's it. Every commit is now protected.
+From then on the hook runs `gate scan --staged` before each commit and blocks the commit if a rule matches. It only sees what the rules match, so treat it as one layer, not a guarantee.
 
-## What Makes Gate Different
+## How Gate compares
 
-| Capability | Gitleaks | TruffleHog | GitHub | GitGuardian | **Gate** |
+The tools below overlap with Gate but aren't equivalent to it — several are mature, widely deployed projects with far more detection coverage. This table is a feature checklist, not a ranking, and a larger rule count is not by itself a better outcome.
+
+| Capability | Gitleaks | TruffleHog | GitHub | GitGuardian | Gate |
 |---|---|---|---|---|---|
-| Detection rules | 170 | 800+ | Partners | 482 | **111** |
-| Credential verification | No | Yes | Partial | Paid | **Yes** |
-| Auto-fix / extract to env | No | No | No | No | **Yes** |
-| Interactive remediation | No | No | No | No | **Yes** |
-| Incident response workflow | No | No | No | Paid | **Yes** |
-| Compliance reports | No | No | Paid | Paid | **Yes** |
-| SARIF output | Yes | Yes | N/A | Yes | **Yes** |
-| 100% free, unlimited | Yes | Yes | Public only | 25 devs | **Yes** |
-| Runs 100% locally | Yes | Yes | No | No | **Yes** |
+| Detection rules | 170 | 800+ | Partners | 482 | 111 |
+| Credential verification | No | Yes | Partial | Paid | Yes |
+| Auto-fix / extract to env | No | No | No | No | Yes |
+| Interactive remediation | No | No | No | No | Yes |
+| Incident response workflow | No | No | No | Paid | Yes |
+| Compliance reports | No | No | Paid | Paid | Yes |
+| SARIF output | Yes | Yes | N/A | Yes | Yes |
+| Free, unlimited | Yes | Yes | Public only | 25 devs | Yes |
+| Runs locally | Yes | Yes | No | No | Yes |
 
-<sub>Comparison reflects publicly documented free-tier features as of August 2026. Spot an error? Open an issue and it gets fixed.</sub>
+<sub>Comparison reflects publicly documented free-tier features as of August 2026. Spot an error? Open an issue and it gets fixed. Note that "runs locally" covers scanning and fixing; `gate verify` deliberately contacts the relevant provider's API, and the CLI checks for new versions.</sub>
 
-## How It Looks
+## Example output
 
 ```
   gate -- 2 secrets found -----------------------------------------
@@ -119,15 +123,15 @@ By severity: critical 54 · high 43 · medium 11 · low 3
 | Secrets Management | 1 |
 <!-- GATE:RULES:END -->
 
-- **Broad detection coverage** -- AWS, GCP, Azure, GitHub, Stripe, OpenAI, Anthropic, databases, private keys, PII, and more
-- **Credential verification** -- checks if detected secrets are live and active
-- **Auto-fix across 9 languages** -- JS/TS, Python, Go, Ruby, Java, YAML, Terraform, Dockerfile, JSON
-- **Interactive remediation** -- single-keypress fix, vault, or ignore per finding
-- **Incident response** -- 5-step guided workflow: rotate, audit, clean, scrub, document
-- **Compliance reports** -- OWASP, NIST, CIS, SOC2-ready output
-- **SARIF output** -- upload results to GitHub Advanced Security
-- **Git history scanning** -- find secrets in past commits and generate purge scripts
-- **Zero config, zero dependencies, zero accounts** -- runs entirely on your machine
+- **Detection rules** -- patterns for AWS, GCP, Azure, GitHub, Stripe, OpenAI, Anthropic, database URLs, private keys, some PII, and a generic entropy check. Anything without a matching rule goes unreported.
+- **Credential verification** -- for the providers Gate supports, `gate verify` calls that provider's API to see whether a detected credential still authenticates. This sends the candidate value to the provider.
+- **Fixes across 9 file types** -- JS/TS, Python, Go, Ruby, Java, YAML, Terraform, Dockerfile, and JSON. Gate moves the value into `.env` and rewrites the line to read from the environment; JSON is extract-only, so you wire up the reference yourself. Review the diff either way.
+- **Interactive remediation** -- step through findings one at a time and fix, vault, or ignore each with a single keypress.
+- **Incident response** -- a 5-step guided workflow for secrets already pushed to a remote: rotate, audit, clean, scrub, document.
+- **Compliance reports** -- findings mapped to OWASP, NIST, CIS, and SOC2 headings. A starting point for paperwork, not an audit artifact.
+- **SARIF output** -- results can be uploaded to GitHub Advanced Security.
+- **Git history scanning** -- searches past commits and writes purge scripts for you to review and run.
+- **Local by default** -- no account, and one runtime dependency (js-yaml). Scanning and fixing stay on your machine; `gate verify` and the update check are the exceptions.
 
 ## Installation
 
@@ -155,7 +159,7 @@ jobs:
 
 ## Configuration
 
-Gate works with zero configuration. For customization, create a `.gaterc` file in your project root to adjust severity thresholds, toggle rules, and set scan targets. Use `.gateignore` to exclude files and directories from scanning.
+Gate runs without a config file. To customize it, create a `.gaterc` file in your project root to adjust severity thresholds, toggle rules, and set scan targets. Use `.gateignore` to exclude files and directories from scanning — useful when a rule keeps flagging something that isn't a secret.
 
 See **[GUIDE.md](GUIDE.md)** for the full technical reference.
 
@@ -165,4 +169,4 @@ Apache 2.0 -- free to use, modify, and distribute, with patent protection. See [
 
 ---
 
-Built by [PenumbraForge](https://penumbraforge.com). Free forever.
+Built by [PenumbraForge](https://penumbraforge.com). Bug reports and corrections are welcome at [github.com/penumbraforge/gate/issues](https://github.com/penumbraforge/gate/issues).
